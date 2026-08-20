@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "booking": {
+      "fields": {
+        "firstName": "string",
+        "surname": "string",
+        "mobileNumber": "string",
+        "email": "string",
+        "numTickets": "number",
+        "tableBookingOption": "string",
+        "tableNumber": "number",
+        "specialRequests": "string",
+        "consentTerms": "boolean",
+        "paymentStatus": "string",
+        "paymentMethod": "string",
+        "amount": "number",
+        "checkedIn": "boolean",
+        "checkedInAt": "string",
+        "createdAt": "string"
+      }
+    },
+    "table": {
+      "fields": {
+        "capacity": "number",
+        "seatsReserved": "number",
+        "bookings": "array"
+      }
+    },
+    "email": {
+      "fields": {
+        "ticketId": "string",
+        "recipientEmail": "string",
+        "recipientName": "string",
+        "subject": "string",
+        "body": "string",
+        "sentAt": "string"
+      }
+    }
+  },
+  "firestore": {
+    "bookings": {
+      "entity": "booking"
+    },
+    "tables": {
+      "entity": "table"
+    },
+    "emails": {
+      "entity": "email"
+    }
+  }
+}

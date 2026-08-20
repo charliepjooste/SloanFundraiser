@@ -1,0 +1,6 @@
+{
+  "name": "Sloan Fundraiser Gala",
+  "description": "Gala event ticketing, interactive seating management, live check-in scanner, and Gemini AI Concierge",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
