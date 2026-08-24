@@ -25,6 +25,7 @@ import {
   generateWhatsAppMessage, 
   generateTicketEmailBody,
   getShortReference,
+  approveEftPayment,
   EVENT_DETAILS 
 } from '../firebase';
 
@@ -40,6 +41,23 @@ export default function GuestManagementTab({
   const [tableFilter, setTableFilter] = useState('all');
   const [raffleFilter, setRaffleFilter] = useState('all');
   const [emailStatusMsg, setEmailStatusMsg] = useState('');
+
+  // Handle Admin clearing EFT funds
+  const handleApproveEft = async (booking) => {
+    setEmailStatusMsg(`⏳ Clearing EFT funds for ${booking.firstName} ${booking.surname}...`);
+    try {
+      await approveEftPayment(booking);
+      if (onUpdateBooking) {
+        onUpdateBooking(booking.id, { paymentStatus: 'paid' });
+      }
+      setEmailStatusMsg(`✅ Funds Cleared & Ticket Pass Activated for ${booking.firstName} ${booking.surname}!`);
+      setTimeout(() => setEmailStatusMsg(''), 5000);
+    } catch (e) {
+      console.error(e);
+      setEmailStatusMsg('❌ Error clearing EFT payment');
+      setTimeout(() => setEmailStatusMsg(''), 4000);
+    }
+  };
   
   // Modals
   const [editingGuest, setEditingGuest] = useState(null);
@@ -425,12 +443,29 @@ export default function GuestManagementTab({
                     )}
                   </td>
 
-                  {/* Amount Paid */}
+                  {/* Amount Paid & Payment Status */}
                   <td className="p-3.5">
                     <span className="font-black text-emerald-700 text-sm">
                       R{b.amount}
                     </span>
-                    <span className="block text-[10px] text-slate-400 uppercase font-semibold">{b.paymentMethod || 'Paid'}</span>
+                    {b.paymentStatus === 'pending_eft' ? (
+                      <div className="mt-1 space-y-1">
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300">
+                          ⏳ EFT Pending
+                        </span>
+                        <button
+                          onClick={() => handleApproveEft(b)}
+                          className="block w-full py-1 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] shadow-sm transition"
+                          title="Click to clear bank funds and officially issue ticket pass"
+                        >
+                          ✓ Clear Funds
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="block text-[10px] text-emerald-700 uppercase font-black">
+                        ✓ {b.paymentMethod === 'card' ? 'Card Paid' : 'Paid & Active'}
+                      </span>
+                    )}
                   </td>
 
                   {/* Send & Actions */}

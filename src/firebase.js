@@ -32,10 +32,11 @@ export const bookingsCol = collection(db, 'bookings');
 export const tablesCol = collection(db, 'tables');
 export const emailsCol = collection(db, 'emails');
 
-// Admin emails list
+// Admin emails list (Charlie & Nicole)
 export const ADMIN_EMAILS = [
   'charlie@nostra.co.za',
   'charliepjooste@gmail.com',
+  'nicolejooste8@gmail.com',
   'admin@sloanfundraiser.co.za'
 ];
 
@@ -61,8 +62,8 @@ export const EVENT_DETAILS = {
   totalTables: 35,
   seatsPerTable: 10,
   contacts: [
-    { name: "Nicole Jooste", phone: "071 113 4812" },
-    { name: "Marsha Beukes", phone: "079 528 5350" }
+    { name: "Nicole Jooste", phone: "071 113 4812", email: "nicolejooste8@gmail.com" },
+    { name: "Charlton (Charlie) Jooste", phone: "079 528 5350", email: "charliepjooste@gmail.com" }
   ],
   banking: {
     bank: "FNB/RMB",
@@ -98,7 +99,43 @@ export function getShortReference(booking) {
 }
 
 /**
- * Generate full text email confirmation body
+ * Generate email notification for Admins when an EFT booking is submitted
+ */
+export function generateAdminEftNotificationEmail(booking) {
+  const ticketRef = getShortReference(booking);
+  const tableText = booking.tableBookingOption === 'Raffle Tickets Only' 
+    ? '🎟️ Raffle Supporter Only' 
+    : `Table #${booking.tableNumber || 1} (${booking.tableBookingOption || 'Standard Dance Ticket'})`;
+
+  return `📢 NEW EFT BOOKING PENDING APPROVAL - SLOAN JOOSTE FUNDRAISER 📢
+
+Hello Charlie & Nicole,
+
+A new guest has submitted a booking requesting to pay via Direct EFT:
+
+==================================================
+📋 BOOKING & GUEST DETAILS
+==================================================
+• Guest Name: ${booking.firstName} ${booking.surname}
+• Ticket Reference: ${ticketRef}
+• Mobile Number: ${booking.mobileNumber}
+• Email: ${booking.email}
+• Table Allocation: ${tableText}
+• Dance Tickets: ${booking.numTickets || 1} Seat(s)
+• Raffle Tickets: ${booking.raffleTicketsCount || 0} Ticket(s)
+• Total Amount Due: R${booking.amount || 0}
+• Payment Status: ⏳ PENDING EFT CLEARANCE
+
+==================================================
+⚡ ACTION REQUIRED
+==================================================
+Once you verify that R${booking.amount} has cleared into the FNB Account (Ref: ${ticketRef}), please log into the Admin Console at your fundraiser website and click "✓ Clear Funds & Issue Pass" under the Guest Manager tab.
+
+The system will then instantly allocate their table seats and issue their official digital QR ticket pass!`;
+}
+
+/**
+ * Generate full text email confirmation body for Guest
  */
 export function generateTicketEmailBody(booking) {
   const ticketRef = getShortReference(booking);
@@ -106,22 +143,39 @@ export function generateTicketEmailBody(booking) {
     ? '🎟️ Raffle Supporter Pass' 
     : `Table #${booking.tableNumber || 1} (${booking.tableBookingOption || 'Standard Dance Ticket'})`;
 
-  return `💚 TICKET CONFIRMATION: SLOAN JOOSTE'S FUNDRAISER DANCE 💚
+  const isEftPending = booking.paymentStatus === 'pending_eft';
+
+  return `💚 ${isEftPending ? 'EFT BOOKING SUBMISSION RECEIVED' : 'TICKET CONFIRMATION'}: SLOAN JOOSTE'S FUNDRAISER DANCE 💚
 
 Dear ${booking.firstName} ${booking.surname},
 
 Thank you for your generous support for Sloan Jooste in aid of his post-op physiotherapy, treatment, and Cerebral Palsy care!
 
 ==================================================
-🎟️ YOUR DIGITAL TICKET PASS & BOOKING DETAILS
+🎟️ YOUR BOOKING DETAILS & STATUS
 ==================================================
 • Ticket Reference: ${ticketRef}
 • Guest Name: ${booking.firstName} ${booking.surname}
 • Seating / Table Allocation: ${tableText}
 • Dance Tickets Reserved: ${booking.numTickets || 1} Seat(s)
 • Raffle Tickets Included: ${booking.raffleTicketsCount || 0} Ticket(s)
-• Amount Paid: R${booking.amount || 0} (${booking.paymentMethod || 'Paid'})
+• Amount: R${booking.amount || 0} (${booking.paymentMethod === 'eft' ? 'Direct EFT' : 'Card / Instant'})
+• Status: ${isEftPending ? '⏳ Pending Bank Funds Clearance by Organizers' : '✅ Confirmed & Paid'}
 
+${isEftPending ? `
+==================================================
+🏦 EFT BANK PAYMENT INSTRUCTIONS
+==================================================
+Please make an EFT transfer to:
+• Bank: ${EVENT_DETAILS.banking.bank}
+• Account Holder: ${EVENT_DETAILS.banking.accountHolder}
+• Account Type: ${EVENT_DETAILS.banking.accountType}
+• Account Number: ${EVENT_DETAILS.banking.accountNumber}
+• Branch Code: ${EVENT_DETAILS.banking.branchCode}
+• Payment Reference: ${ticketRef} (Important: use your reference: ${ticketRef})
+
+*Note: Your tickets will be officially allocated once the organizers (Charlie or Nicole) have cleared the funds in the bank. Your official digital QR pass will then be sent to you via Email and WhatsApp!*
+` : `
 ==================================================
 📍 EVENT DETAILS & VENUE
 ==================================================
@@ -134,30 +188,15 @@ Thank you for your generous support for Sloan Jooste in aid of his post-op physi
 • Dress Code: ${EVENT_DETAILS.dressCode}
 • Refreshments: ${EVENT_DETAILS.byo}
 • Entertainment: ${EVENT_DETAILS.entertainment}
-
-==================================================
-🎁 BUY EXTRA RAFFLE TICKETS VIA EFT
-==================================================
-Want to increase your chances of winning our 7 Grand Raffle Prizes (including a Whole Lamb, Photoshoot, Chivas Regal Whiskies, Spa Massages & Spyced Restaurant Vouchers)?
-
-Raffle Tickets: R50 for 1 Ticket • R100 for 3 Tickets
-
-Official Banking Details:
-• Bank: ${EVENT_DETAILS.banking.bank}
-• Account Holder: ${EVENT_DETAILS.banking.accountHolder}
-• Account Type: ${EVENT_DETAILS.banking.accountType}
-• Account Number: ${EVENT_DETAILS.banking.accountNumber}
-• Branch Code: ${EVENT_DETAILS.banking.branchCode}
-• Payment Reference: ${ticketRef} (Important: use your short reference: ${ticketRef})
+`}
 
 ==================================================
 📞 EVENT CONTACTS
 ==================================================
-• Nicole Jooste: 071 113 4812
-• Marsha Beukes: 079 528 5350
+• Nicole Jooste: 071 113 4812 (nicolejooste8@gmail.com)
+• Charlie Jooste: 079 528 5350 (charliepjooste@gmail.com)
 
-Please present your QR digital ticket (attached / on your pass) at the door for entry.
-Let's come together for Sloan! 💚`;
+Thank you for supporting Sloan! 💚`;
 }
 
 /**
@@ -169,7 +208,6 @@ export function generateHtmlTicketEmail(booking) {
     ? '🎟️ Raffle Supporter' 
     : `Table #${booking.tableNumber || 1}`;
 
-  // Encoded QR Code URL via standard public high-res QR API
   const qrData = encodeURIComponent(JSON.stringify({
     ref: ticketRef,
     id: booking.id,
@@ -280,7 +318,7 @@ export function generateHtmlTicketEmail(booking) {
 
     <!-- Footer -->
     <div style="background-color: #f8fafc; padding: 14px 24px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #64748b;">
-      Nicole Jooste: 071 113 4812 • Marsha Beukes: 079 528 5350<br>
+      Nicole Jooste: 071 113 4812 • Charlie Jooste: 079 528 5350<br>
       <strong>Thank you for supporting Sloan! 💚</strong>
     </div>
 
@@ -298,7 +336,25 @@ export function generateWhatsAppMessage(booking) {
     ? '🎟️ Raffle Supporter' 
     : `Table #${booking.tableNumber || 1}`;
 
-  const message = `*🎟️ TICKET PASS: SLOAN JOOSTE'S FUNDRAISER DANCE 💚*
+  const isEftPending = booking.paymentStatus === 'pending_eft';
+
+  const message = isEftPending
+    ? `*🎟️ EFT BOOKING RECEIVED: SLOAN JOOSTE'S FUNDRAISER DANCE 💚*
+
+Hello *${booking.firstName} ${booking.surname}*! We received your booking request:
+
+*• Booking Ref:* ${ticketRef}
+*• Seating:* ${tableText} (${booking.numTickets || 1} Seat/s)
+*• Raffle Tickets:* ${booking.raffleTicketsCount || 0} Entry/ies
+*• Total Due:* R${booking.amount || 0}
+*• Status:* ⏳ Awaiting Bank Funds Clearance by Organizers
+
+*🏦 Please EFT R${booking.amount} to:*
+Bank: FNB/RMB | Acc Holder: Charlton Jooste | Acc: 62334900091 | Branch: 250655
+*Ref:* ${ticketRef}
+
+*Note:* Once cleared by Charlie or Nicole, your official ticket pass with QR code will be activated! 💚`
+    : `*🎟️ TICKET PASS: SLOAN JOOSTE'S FUNDRAISER DANCE 💚*
 
 Hello *${booking.firstName} ${booking.surname}*! Here is your official pass details for Sloan Jooste's Fundraiser Dance:
 
@@ -306,6 +362,7 @@ Hello *${booking.firstName} ${booking.surname}*! Here is your official pass deta
 *• Seating:* ${tableText} (${booking.numTickets || 1} Seat/s)
 *• Raffle Tickets:* ${booking.raffleTicketsCount || 0} Entry/ies
 *• Total Paid:* R${booking.amount || 0}
+*• Status:* ✅ Confirmed & Paid
 
 *📅 Date:* Friday, 09 October 2026 (19:00 - 00:00)
 *🎟️ Raffle Draw:* 21:00 - 21:30
@@ -330,6 +387,8 @@ See you on the dancefloor! 💚`;
 export async function createBookingInFirestore(bookingData) {
   const now = new Date().toISOString();
   const shortRef = `SJ-${Math.floor(1000 + Math.random() * 9000)}`;
+  const isEft = bookingData.paymentMethod === 'eft';
+  const paymentStatus = isEft ? 'pending_eft' : 'paid';
   
   const newBookingPayload = {
     ticketRef: shortRef,
@@ -345,7 +404,7 @@ export async function createBookingInFirestore(bookingData) {
     guestNames: bookingData.guestNames || [],
     specialRequests: bookingData.specialRequests || '',
     consentTerms: Boolean(bookingData.consentTerms),
-    paymentStatus: bookingData.paymentStatus || 'paid',
+    paymentStatus: paymentStatus,
     paymentMethod: bookingData.paymentMethod || 'card',
     amount: Number(bookingData.amount) || 0,
     checkedIn: false,
@@ -353,29 +412,53 @@ export async function createBookingInFirestore(bookingData) {
     createdAt: now
   };
 
-  // Add document to bookings collection
-  const bookingRef = await addDoc(bookingsCol, newBookingPayload);
-  const bookingId = bookingRef.id;
-  const fullBooking = { id: bookingId, ...newBookingPayload };
+  let bookingId = `local_${Date.now()}`;
+  let fullBooking = { id: bookingId, ...newBookingPayload };
 
-  // Log automated confirmation email
+  // Try adding document to Firestore bookings collection
+  try {
+    const bookingRef = await addDoc(bookingsCol, newBookingPayload);
+    bookingId = bookingRef.id;
+    fullBooking.id = bookingId;
+  } catch (err) {
+    console.warn("Firestore addDoc warning (using local fallback ID):", err);
+  }
+
+  // If EFT, log Admin Notification email for Charlie & Nicole
+  if (isEft) {
+    try {
+      await addDoc(emailsCol, {
+        ticketId: bookingId,
+        ticketRef: shortRef,
+        recipientEmail: 'charliepjooste@gmail.com, nicolejooste8@gmail.com',
+        recipientName: 'Charlie & Nicole (Admins)',
+        subject: `📢 [NEW EFT BOOKING] ${newBookingPayload.firstName} ${newBookingPayload.surname} (${shortRef} • R${newBookingPayload.amount})`,
+        body: generateAdminEftNotificationEmail(fullBooking),
+        sentAt: now
+      });
+    } catch (e) {
+      console.warn("Admin EFT notification log warning:", e);
+    }
+  }
+
+  // Log confirmation email for guest
   try {
     await addDoc(emailsCol, {
       ticketId: bookingId,
       ticketRef: shortRef,
       recipientEmail: newBookingPayload.email,
       recipientName: `${newBookingPayload.firstName} ${newBookingPayload.surname}`,
-      subject: `🎟️ Ticket Confirmation - Sloan Jooste's Fundraiser Dance (${shortRef} • Table #${newBookingPayload.tableNumber})`,
+      subject: `🎟️ ${isEft ? 'EFT Booking Received' : 'Ticket Confirmation'} - Sloan Jooste's Fundraiser Dance (${shortRef})`,
       body: generateTicketEmailBody(fullBooking),
       htmlBody: generateHtmlTicketEmail(fullBooking),
       sentAt: now
     });
   } catch (e) {
-    console.warn("Email log warning:", e);
+    console.warn("Guest confirmation email log warning:", e);
   }
 
-  // Update tables collection seat allocation (only if not standalone raffle ticket)
-  if (newBookingPayload.tableBookingOption !== 'Raffle Tickets Only') {
+  // Update tables collection seat allocation (only if card payment paid immediately)
+  if (!isEft && newBookingPayload.tableBookingOption !== 'Raffle Tickets Only') {
     try {
       const tableDocRef = doc(db, 'tables', `table_${newBookingPayload.tableNumber}`);
       const tableSnap = await getDoc(tableDocRef);
@@ -400,6 +483,40 @@ export async function createBookingInFirestore(bookingData) {
   }
 
   return fullBooking;
+}
+
+/**
+ * Admin Action: Approve / Clear EFT Payment and Allocate Seats
+ */
+export async function approveEftPayment(booking) {
+  try {
+    const bookingRef = doc(db, 'bookings', booking.id);
+    await updateDoc(bookingRef, {
+      paymentStatus: 'paid'
+    });
+
+    // Update table seat reservation count
+    if (booking.tableBookingOption !== 'Raffle Tickets Only') {
+      const tableDocRef = doc(db, 'tables', `table_${booking.tableNumber}`);
+      const tableSnap = await getDoc(tableDocRef);
+      
+      if (tableSnap.exists()) {
+        const currentData = tableSnap.data();
+        const currentBookings = currentData.bookings || [];
+        await updateDoc(tableDocRef, {
+          seatsReserved: (currentData.seatsReserved || 0) + (Number(booking.numTickets) || 1),
+          bookings: Array.from(new Set([...currentBookings, booking.id]))
+        });
+      }
+    }
+
+    // Resend confirmation pass
+    await resendTicketEmail({ ...booking, paymentStatus: 'paid' });
+    return true;
+  } catch (e) {
+    console.error("Error approving EFT booking:", e);
+    return false;
+  }
 }
 
 /**

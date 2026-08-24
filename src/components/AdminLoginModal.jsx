@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, Mail, Lock, KeyRound, AlertCircle } from 'lucide-react';
+import { X, ShieldCheck, Mail, Lock, KeyRound, AlertCircle, UserCheck } from 'lucide-react';
 import { isUserAdmin } from '../firebase';
 
 export default function AdminLoginModal({ 
@@ -7,7 +7,7 @@ export default function AdminLoginModal({
   onClose, 
   onLoginSuccess 
 }) {
-  const [email, setEmail] = useState('charlie@nostra.co.za');
+  const [email, setEmail] = useState('charliepjooste@gmail.com');
   const [passcode, setPasscode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -17,14 +17,14 @@ export default function AdminLoginModal({
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
     
-    // Check if email matches admin or passcode is correct (default admin passcode 'sloan2026')
+    // Check if email matches authorized admin or passcode is correct
     if (isUserAdmin(cleanEmail) || passcode === 'sloan2026' || passcode === '1234') {
       localStorage.setItem('sloan_admin_authenticated', 'true');
       localStorage.setItem('sloan_admin_email', cleanEmail);
       if (onLoginSuccess) onLoginSuccess(cleanEmail);
       onClose();
     } else {
-      setErrorMsg('Invalid admin credentials. Please enter your authorized admin email or passcode.');
+      setErrorMsg('Invalid admin email. Please use an authorized organizer email or passcode.');
     }
   };
 
@@ -61,6 +61,30 @@ export default function AdminLoginModal({
             </div>
           )}
 
+          {/* Quick Select Buttons */}
+          <div className="space-y-1.5">
+            <label className="block font-bold text-slate-700">Quick Organizer Login:</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setEmail('charliepjooste@gmail.com')}
+                className={`p-2 rounded-xl border text-[11px] font-bold text-left transition ${email === 'charliepjooste@gmail.com' ? 'border-purple-600 bg-purple-50 text-purple-950' : 'border-slate-200 bg-slate-50 text-slate-600'}`}
+              >
+                Charlie Jooste
+                <span className="block text-[9px] text-slate-400 font-mono truncate">charliepjooste@gmail.com</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEmail('nicolejooste8@gmail.com')}
+                className={`p-2 rounded-xl border text-[11px] font-bold text-left transition ${email === 'nicolejooste8@gmail.com' ? 'border-purple-600 bg-purple-50 text-purple-950' : 'border-slate-200 bg-slate-50 text-slate-600'}`}
+              >
+                Nicole Jooste
+                <span className="block text-[9px] text-slate-400 font-mono truncate">nicolejooste8@gmail.com</span>
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="block font-black text-slate-900 mb-1.5">Admin Email Address</label>
             <div className="relative">
@@ -69,7 +93,7 @@ export default function AdminLoginModal({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="charlie@nostra.co.za"
+                placeholder="e.g. nicolejooste8@gmail.com"
                 required
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-purple-200 rounded-xl text-slate-900 font-semibold focus:outline-none focus:border-purple-600 text-xs"
               />
@@ -100,7 +124,7 @@ export default function AdminLoginModal({
           </div>
 
           <p className="text-[11px] text-center text-slate-500 font-medium">
-            Authorized Organizers: Nicole Jooste • Marsha Beukes • Charlton Jooste
+            Authorized Organizers: Nicole Jooste • Charlton (Charlie) Jooste • Marsha Beukes
           </p>
         </form>
 
