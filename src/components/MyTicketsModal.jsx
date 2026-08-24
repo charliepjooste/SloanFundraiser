@@ -18,7 +18,8 @@ import {
   Edit3,
   UserCheck,
   Save,
-  Lock
+  Lock,
+  Download
 } from 'lucide-react';
 import { 
   EVENT_DETAILS, 
@@ -69,7 +70,6 @@ export default function MyTicketsModal({
     const seatsCount = Number(booking.numTickets) || (booking.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : 1);
     let names = booking.guestNames ? [...booking.guestNames] : [];
     
-    // Fill up to seatsCount
     while (names.length < seatsCount) {
       names.push(names.length === 0 ? `${booking.firstName} ${booking.surname}` : '');
     }
@@ -121,12 +121,31 @@ export default function MyTicketsModal({
     }
   };
 
-  const handleDownloadPdf = async (booking) => {
+  // Download All Passes in Booking
+  const handleDownloadAllPdf = async (booking) => {
+    const ref = getShortReference(booking);
     setDownloadingId(booking.id);
-    setStatusMsg('⏳ Generating PDF ticket...');
+    setStatusMsg(`⏳ Generating PDF passes for ${ref}...`);
     try {
-      await downloadTicketPdf(booking);
-      setStatusMsg(`✅ Downloaded PDF for ${getShortReference(booking)}`);
+      await downloadTicketPdf(booking, null);
+      setStatusMsg(`✅ Downloaded all passes for ${ref}`);
+      setTimeout(() => setStatusMsg(''), 4000);
+    } catch (err) {
+      console.error(err);
+      setStatusMsg('❌ Error generating PDF');
+      setTimeout(() => setStatusMsg(''), 4000);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  // Download Single Pass
+  const handleDownloadSinglePdf = async (booking, passItem) => {
+    setDownloadingId(`${booking.id}-${passItem.passRef}`);
+    setStatusMsg(`⏳ Generating PDF for ${passItem.passRef}...`);
+    try {
+      await downloadTicketPdf(booking, passItem);
+      setStatusMsg(`✅ Downloaded PDF for ${passItem.passRef}`);
       setTimeout(() => setStatusMsg(''), 4000);
     } catch (err) {
       console.error(err);
@@ -166,7 +185,7 @@ export default function MyTicketsModal({
             </div>
             <div>
               <h2 className="text-base font-black tracking-wide">My Ticket Passes & Bookings</h2>
-              <span className="text-[11px] text-emerald-200 font-medium">View passes, download PDF, or update attendee names</span>
+              <span className="text-[11px] text-emerald-200 font-medium">View passes, download individual tickets, or update attendee names</span>
             </div>
           </div>
           <button 
@@ -254,6 +273,40 @@ export default function MyTicketsModal({
                     const ticketRef = getShortReference(b);
                     const isEftPending = b.paymentStatus === 'pending_eft';
 
+                    // Build list of individual issued tickets
+                    const seatItems = [];
+                    if (b.tableBookingOption !== 'Raffle Tickets Only') {
+                      const seatsCount = b.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(b.numTickets) || 1);
+                      for (let s = 1; s <= seatsCount; s++) {
+                        const name = (b.guestNames && b.guestNames[s - 1] && b.guestNames[s - 1].trim())
+                          ? b.guestNames[s - 1].trim()
+                          : (s === 1 ? `${b.firstName} ${b.surname}` : `${b.firstName} ${b.surname} (Seat ${s})`);
+                        
+                        seatItems.push({
+                          type: 'seat',
+                          passRef: `${ticketRef}-S${s}`,
+                          label: `Seat #${s}`,
+                          attendeeName: name
+                        });
+                      }
+                    }
+
+                    const raffleItems = [];
+                    const raffleCount = Number(b.raffleTicketsCount) || 0;
+                    for (let r = 1; r <= raffleCount; r++) {
+                      const entrant = (b.raffleEntrants && b.raffleEntrants[r - 1]) ? b.raffleEntrants[r - 1] : null;
+                      const name = (entrant && entrant.name && entrant.name.trim())
+                        ? entrant.name.trim()
+                        : `${b.firstName} ${b.surname}${raffleCount > 1 ? ` (Entry ${r})` : ''}`;
+                      
+                      raffleItems.push({
+                        type: 'raffle',
+                        passRef: `${ticketRef}-R${r}`,
+                        label: `Raffle #${r}`,
+                        attendeeName: name
+                      });
+                    }
+
                     return (
                       <div key={b.id} className="p-5 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-4 hover:border-purple-300 transition">
                         
@@ -303,12 +356,12 @@ export default function MyTicketsModal({
 
                           <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
                             <span className="text-[9px] uppercase font-bold text-emerald-900 block">Dance Seats</span>
-                            <span className="font-black text-xs text-emerald-950">{b.numTickets || 1} Seat(s)</span>
+                            <span className="font-black text-xs text-emerald-950">{seatItems.length} Issued Pass(es)</span>
                           </div>
 
                           <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
                             <span className="text-[9px] uppercase font-bold text-emerald-900 block">Raffle Entries</span>
-                            <span className="font-black text-xs text-emerald-950">{b.raffleTicketsCount || 0} Tickets</span>
+                            <span className="font-black text-xs text-emerald-950">{raffleItems.length} Issued Pass(es)</span>
                           </div>
 
                           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -317,21 +370,78 @@ export default function MyTicketsModal({
                           </div>
                         </div>
 
-                        {/* Attendee Names Display */}
-                        {b.guestNames && b.guestNames.length > 0 && (
-                          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1">
-                            <span className="font-bold text-purple-950 text-[11px] block">Attending Guests on this Booking:</span>
-                            <div className="flex flex-wrap gap-1.5 pt-0.5">
-                              {b.guestNames.map((name, i) => (
-                                <span key={i} className="px-2 py-0.5 rounded-lg bg-white border border-purple-200 text-slate-800 font-semibold text-[11px]">
-                                  #{i + 1}: {name || `${b.firstName} ${b.surname}`}
-                                </span>
-                              ))}
-                            </div>
+                        {/* INDIVIDUAL ISSUED TICKETS LIST */}
+                        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-purple-950 text-xs flex items-center gap-1.5">
+                              <Ticket className="w-3.5 h-3.5 text-emerald-600" />
+                              Individual Issued Tickets ({seatItems.length + raffleItems.length} Total):
+                            </span>
+                            <button
+                              onClick={() => handleDownloadAllPdf(b)}
+                              disabled={downloadingId === b.id}
+                              className="text-[10px] font-black text-emerald-700 hover:underline flex items-center gap-1"
+                            >
+                              <Download className="w-3 h-3" /> Download All Bundle (.pdf)
+                            </button>
                           </div>
-                        )}
 
-                        {/* Action Buttons: Pass, PDF, Edit Attendees, WhatsApp, Gmail */}
+                          {/* Seat Tickets */}
+                          {seatItems.length > 0 && (
+                            <div className="space-y-1">
+                              <span className="text-[10px] uppercase font-bold text-slate-400">Dance Admission Passes:</span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                {seatItems.map((st) => (
+                                  <div key={st.passRef} className="p-2 rounded-xl bg-white border border-purple-100 flex items-center justify-between gap-1 shadow-2xs">
+                                    <div className="truncate">
+                                      <span className="font-mono text-[10px] font-black text-purple-900 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 mr-1.5">
+                                        {st.passRef}
+                                      </span>
+                                      <span className="font-semibold text-slate-800 text-[11px] truncate">{st.attendeeName}</span>
+                                    </div>
+                                    <button
+                                      onClick={() => handleDownloadSinglePdf(b, st)}
+                                      disabled={downloadingId === `${b.id}-${st.passRef}`}
+                                      className="p-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0 transition"
+                                      title="Download PDF for this seat pass"
+                                    >
+                                      PDF ↓
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Raffle Tickets */}
+                          {raffleItems.length > 0 && (
+                            <div className="space-y-1 pt-1">
+                              <span className="text-[10px] uppercase font-bold text-slate-400">Charity Raffle Entry Passes:</span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                {raffleItems.map((rt) => (
+                                  <div key={rt.passRef} className="p-2 rounded-xl bg-white border border-emerald-100 flex items-center justify-between gap-1 shadow-2xs">
+                                    <div className="truncate">
+                                      <span className="font-mono text-[10px] font-black text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 mr-1.5">
+                                        {rt.passRef}
+                                      </span>
+                                      <span className="font-semibold text-slate-800 text-[11px] truncate">{rt.attendeeName}</span>
+                                    </div>
+                                    <button
+                                      onClick={() => handleDownloadSinglePdf(b, rt)}
+                                      disabled={downloadingId === `${b.id}-${rt.passRef}`}
+                                      className="p-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 text-[10px] font-bold shrink-0 transition"
+                                      title="Download PDF for this raffle pass"
+                                    >
+                                      PDF ↓
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Buttons: Pass, Edit Attendees, WhatsApp, Gmail */}
                         <div className="pt-2 flex flex-wrap items-center gap-2">
                           
                           {/* View Digital Pass */}
@@ -341,16 +451,7 @@ export default function MyTicketsModal({
                             }}
                             className="flex-1 py-2 px-3 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
                           >
-                            <Ticket className="w-3.5 h-3.5" /> View Digital Pass
-                          </button>
-
-                          {/* Download PDF */}
-                          <button
-                            onClick={() => handleDownloadPdf(b)}
-                            disabled={downloadingId === b.id}
-                            className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition disabled:opacity-50"
-                          >
-                            <FileText className="w-3.5 h-3.5" /> Download PDF (.pdf)
+                            <Ticket className="w-3.5 h-3.5" /> View Digital Pass Pass
                           </button>
 
                           {/* Edit Attendee Names Button */}
@@ -359,7 +460,7 @@ export default function MyTicketsModal({
                             className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-purple-950 font-bold text-xs flex items-center gap-1 transition"
                             title="Edit individual names on your tickets"
                           >
-                            <Edit3 className="w-3.5 h-3.5 text-purple-700" /> Names
+                            <Edit3 className="w-3.5 h-3.5 text-purple-700" /> Edit Names
                           </button>
 
                           {/* WhatsApp */}

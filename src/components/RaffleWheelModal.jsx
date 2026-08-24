@@ -23,7 +23,7 @@ export default function RaffleWheelModal({ isOpen, onClose, bookings = [] }) {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [activeSideTab, setActiveSideTab] = useState('prizes');
 
-  // Build the complete entrants pool (1 Ticket = 1 Slice, 3 Tickets = 3 Slices)
+  // Build the complete entrants pool (STRICTLY ONLY people who purchased raffle tickets)
   useEffect(() => {
     let list = [];
 
@@ -31,7 +31,9 @@ export default function RaffleWheelModal({ isOpen, onClose, bookings = [] }) {
       bookings.forEach(b => {
         const name = `${b.firstName || ''} ${b.surname || ''}`.trim() || 'Guest';
         const table = Number(b.tableNumber) || 1;
+        const ref = b.ticketRef || `SJ-${(b.id || '').slice(-4).toUpperCase()}`;
 
+        // Only include if raffle tickets were actually bought
         if (b.raffleEntrants && Array.isArray(b.raffleEntrants) && b.raffleEntrants.length > 0) {
           b.raffleEntrants.forEach((ent, idx) => {
             const entrantName = (ent?.name && ent.name.trim()) ? ent.name.trim() : name;
@@ -41,6 +43,7 @@ export default function RaffleWheelModal({ isOpen, onClose, bookings = [] }) {
               name: entrantName,
               table: entrantTable,
               bookingId: b.id,
+              ticketRef: `${ref}-R${idx + 1}`,
               ticketNo: idx + 1,
               source: 'raffle'
             });
@@ -50,67 +53,19 @@ export default function RaffleWheelModal({ isOpen, onClose, bookings = [] }) {
           for (let i = 0; i < count; i++) {
             list.push({
               id: `${b.id}-raffle-${i}`,
-              name: name,
+              name: count > 1 ? `${name} (Entry ${i + 1}/${count})` : name,
               table: table,
               bookingId: b.id,
+              ticketRef: `${ref}-R${i + 1}`,
               ticketNo: i + 1,
               source: 'raffle'
-            });
-          }
-        } else if (b.tableBookingOption === 'Full Private Table (10 Guests)') {
-          if (b.guestNames && Array.isArray(b.guestNames) && b.guestNames.length > 0) {
-            b.guestNames.forEach((guestName, idx) => {
-              if (guestName && guestName.trim()) {
-                list.push({
-                  id: `${b.id}-table-guest-${idx}`,
-                  name: guestName.trim(),
-                  table: table,
-                  bookingId: b.id,
-                  ticketNo: 1,
-                  source: 'table'
-                });
-              }
-            });
-          } else {
-            list.push({ id: `${b.id}-table-host`, name: name, table: table, bookingId: b.id, ticketNo: 1, source: 'table' });
-            for (let s = 2; s <= 10; s++) {
-              list.push({ id: `${b.id}-table-seat-${s}`, name: `${name} Guest ${s}`, table: table, bookingId: b.id, ticketNo: 1, source: 'table' });
-            }
-          }
-        } else if (b.tableBookingOption !== 'Raffle Tickets Only') {
-          const ticketsCount = Number(b.numTickets) || 1;
-          for (let i = 0; i < ticketsCount; i++) {
-            list.push({
-              id: `${b.id}-dance-${i}`,
-              name: name,
-              table: table,
-              bookingId: b.id,
-              ticketNo: i + 1,
-              source: 'dance'
             });
           }
         }
       });
     }
 
-    if (list.length === 0) {
-      list = [
-        { id: 'demo-1', name: "Eleanor Vance", table: 1, ticketNo: 1 },
-        { id: 'demo-2', name: "Eleanor Vance", table: 1, ticketNo: 2 },
-        { id: 'demo-3', name: "Eleanor Vance", table: 1, ticketNo: 3 },
-        { id: 'demo-4', name: "Marcus Sterling", table: 3, ticketNo: 1 },
-        { id: 'demo-5', name: "Marcus Sterling", table: 3, ticketNo: 2 },
-        { id: 'demo-6', name: "Marcus Sterling", table: 3, ticketNo: 3 },
-        { id: 'demo-7', name: "Sophia Chen", table: 2, ticketNo: 1 },
-        { id: 'demo-8', name: "David Miller", table: 5, ticketNo: 1 },
-        { id: 'demo-9', name: "Chloe Adams", table: 4, ticketNo: 1 },
-        { id: 'demo-10', name: "Liam Petersen", table: 8, ticketNo: 1 },
-        { id: 'demo-11', name: "Hannah Jooste", table: 10, ticketNo: 1 },
-        { id: 'demo-12', name: "Thabo Mokoena", table: 7, ticketNo: 1 }
-      ];
-    }
-
-    // Eliminate all tickets belonging to any won participant
+    // Eliminate all tickets belonging to any already won participant
     const winnerNames = new Set(wonPrizes.map(wp => wp.winner.name.trim().toLowerCase()));
     const remainingTickets = list.filter(p => !winnerNames.has(p.name.trim().toLowerCase()));
 
