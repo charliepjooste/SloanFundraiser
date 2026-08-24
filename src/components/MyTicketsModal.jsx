@@ -14,13 +14,18 @@ import {
   ExternalLink,
   CreditCard,
   CheckCircle,
-  Plus
+  Plus,
+  Edit3,
+  UserCheck,
+  Save,
+  Lock
 } from 'lucide-react';
 import { 
   EVENT_DETAILS, 
   getShortReference, 
   generateWhatsAppMessage, 
-  generateTicketEmailBody 
+  generateTicketEmailBody,
+  updateGuestRecord
 } from '../firebase';
 import { downloadTicketPdf } from '../utils/generatePdfTicket';
 
@@ -31,12 +36,19 @@ export default function MyTicketsModal({
   currentEmail = '', 
   onEmailChange,
   onOpenBooking,
-  onSelectTicketPass
+  onSelectTicketPass,
+  onUpdateBooking
 }) {
   const [inputEmail, setInputEmail] = useState(currentEmail || '');
   const [activeEmail, setActiveEmail] = useState(currentEmail || '');
   const [downloadingId, setDownloadingId] = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
+
+  // Attendee Editing state
+  const [editingBooking, setEditingBooking] = useState(null);
+  const [editingNames, setEditingNames] = useState([]);
+  const [editingRaffleEntrants, setEditingRaffleEntrants] = useState([]);
+  const [isSavingNames, setIsSavingNames] = useState(false);
 
   if (!isOpen) return null;
 
@@ -50,6 +62,62 @@ export default function MyTicketsModal({
     if (inputEmail.trim()) {
       setActiveEmail(inputEmail.trim().toLowerCase());
       if (onEmailChange) onEmailChange(inputEmail.trim().toLowerCase());
+    }
+  };
+
+  const handleOpenEditNames = (booking) => {
+    const seatsCount = Number(booking.numTickets) || (booking.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : 1);
+    let names = booking.guestNames ? [...booking.guestNames] : [];
+    
+    // Fill up to seatsCount
+    while (names.length < seatsCount) {
+      names.push(names.length === 0 ? `${booking.firstName} ${booking.surname}` : '');
+    }
+    if (names.length > seatsCount) {
+      names = names.slice(0, seatsCount);
+    }
+
+    const raffleCount = Number(booking.raffleTicketsCount) || 0;
+    let rEntrants = booking.raffleEntrants ? [...booking.raffleEntrants] : [];
+    while (rEntrants.length < raffleCount) {
+      rEntrants.push({ name: `${booking.firstName} ${booking.surname}`, tableNumber: booking.tableNumber || 1 });
+    }
+    if (rEntrants.length > raffleCount) {
+      rEntrants = rEntrants.slice(0, raffleCount);
+    }
+
+    setEditingBooking(booking);
+    setEditingNames(names);
+    setEditingRaffleEntrants(rEntrants);
+  };
+
+  const handleSaveAttendeeNames = async (e) => {
+    e.preventDefault();
+    if (!editingBooking) return;
+    setIsSavingNames(true);
+
+    try {
+      await updateGuestRecord(editingBooking.id, {
+        guestNames: editingNames,
+        raffleEntrants: editingRaffleEntrants
+      });
+
+      if (onUpdateBooking) {
+        onUpdateBooking(editingBooking.id, {
+          guestNames: editingNames,
+          raffleEntrants: editingRaffleEntrants
+        });
+      }
+
+      setStatusMsg('✅ Attendee names updated successfully!');
+      setTimeout(() => setStatusMsg(''), 4000);
+      setEditingBooking(null);
+    } catch (err) {
+      console.error(err);
+      setStatusMsg('❌ Failed to update attendee names');
+      setTimeout(() => setStatusMsg(''), 4000);
+    } finally {
+      setIsSavingNames(false);
     }
   };
 
@@ -98,7 +166,7 @@ export default function MyTicketsModal({
             </div>
             <div>
               <h2 className="text-base font-black tracking-wide">My Ticket Passes & Bookings</h2>
-              <span className="text-[11px] text-emerald-200 font-medium">View, download PDF, or send to WhatsApp & Gmail</span>
+              <span className="text-[11px] text-emerald-200 font-medium">View passes, download PDF, or update attendee names</span>
             </div>
           </div>
           <button 
@@ -184,6 +252,8 @@ export default function MyTicketsModal({
                 <div className="grid grid-cols-1 gap-4">
                   {userBookings.map((b) => {
                     const ticketRef = getShortReference(b);
+                    const isEftPending = b.paymentStatus === 'pending_eft';
+
                     return (
                       <div key={b.id} className="p-5 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-4 hover:border-purple-300 transition">
                         
@@ -202,9 +272,15 @@ export default function MyTicketsModal({
                           </div>
 
                           <div className="flex items-center gap-1.5">
-                            <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black text-xs border border-emerald-300">
-                              R{b.amount} Paid
-                            </span>
+                            {isEftPending ? (
+                              <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-black text-xs border border-amber-300">
+                                ⏳ Pending EFT Clearance
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black text-xs border border-emerald-300">
+                                R{b.amount} Paid
+                              </span>
+                            )}
                             {b.checkedIn && (
                               <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-[10px]">
                                 Checked In
@@ -216,7 +292,10 @@ export default function MyTicketsModal({
                         {/* Summary Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                           <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200">
-                            <span className="text-[9px] uppercase font-bold text-purple-900 block">Table</span>
+                            <span className="text-[9px] uppercase font-bold text-purple-900 flex items-center justify-between">
+                              <span>Table</span>
+                              <Lock className="w-2.5 h-2.5 text-purple-400" title="Table allocation is fixed" />
+                            </span>
                             <span className="font-black text-xs text-purple-950">
                               {b.tableBookingOption === 'Raffle Tickets Only' ? 'Raffle Only' : `Table #${b.tableNumber}`}
                             </span>
@@ -238,7 +317,21 @@ export default function MyTicketsModal({
                           </div>
                         </div>
 
-                        {/* Action Buttons: Pass, PDF, WhatsApp, Gmail */}
+                        {/* Attendee Names Display */}
+                        {b.guestNames && b.guestNames.length > 0 && (
+                          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                            <span className="font-bold text-purple-950 text-[11px] block">Attending Guests on this Booking:</span>
+                            <div className="flex flex-wrap gap-1.5 pt-0.5">
+                              {b.guestNames.map((name, i) => (
+                                <span key={i} className="px-2 py-0.5 rounded-lg bg-white border border-purple-200 text-slate-800 font-semibold text-[11px]">
+                                  #{i + 1}: {name || `${b.firstName} ${b.surname}`}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action Buttons: Pass, PDF, Edit Attendees, WhatsApp, Gmail */}
                         <div className="pt-2 flex flex-wrap items-center gap-2">
                           
                           {/* View Digital Pass */}
@@ -260,6 +353,15 @@ export default function MyTicketsModal({
                             <FileText className="w-3.5 h-3.5" /> Download PDF (.pdf)
                           </button>
 
+                          {/* Edit Attendee Names Button */}
+                          <button
+                            onClick={() => handleOpenEditNames(b)}
+                            className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-purple-950 font-bold text-xs flex items-center gap-1 transition"
+                            title="Edit individual names on your tickets"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-purple-700" /> Names
+                          </button>
+
                           {/* WhatsApp */}
                           <button
                             onClick={() => handleWhatsApp(b)}
@@ -279,16 +381,6 @@ export default function MyTicketsModal({
                           </button>
                         </div>
 
-                        {/* Buy Extra Raffle Entries EFT notice */}
-                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-[11px] text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div>
-                            <span className="font-bold text-purple-900">Want extra raffle tickets (R50/1 • R100/3)?</span>
-                            <p className="text-[10px] text-slate-500">
-                              EFT to <strong>FNB (Acc: 62334900091)</strong> with reference: <strong className="text-emerald-700 font-mono">{ticketRef}</strong>
-                            </p>
-                          </div>
-                        </div>
-
                       </div>
                     );
                   })}
@@ -298,6 +390,96 @@ export default function MyTicketsModal({
           )}
 
         </div>
+
+        {/* MODAL: EDIT ATTENDEE NAMES (Table is LOCKED) */}
+        {editingBooking && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+            <div className="relative w-full max-w-md bg-white rounded-3xl border border-purple-200 shadow-2xl p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+              
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Edit Guest Names on Tickets</h3>
+                  <p className="text-[11px] text-purple-900 font-semibold">
+                    Table #{editingBooking.tableNumber} (Fixed Allocation)
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setEditingBooking(null)}
+                  className="p-1 rounded-full hover:bg-slate-100 text-slate-400"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveAttendeeNames} className="space-y-4 text-xs">
+                <div className="space-y-2">
+                  <span className="font-bold text-slate-700 block">Individual Attendee Names for your Seats:</span>
+                  {editingNames.map((name, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="font-bold text-purple-900 w-16 shrink-0">Seat #{idx + 1}:</span>
+                      <input 
+                        type="text" 
+                        value={name}
+                        onChange={(e) => {
+                          const updated = [...editingNames];
+                          updated[idx] = e.target.value;
+                          setEditingNames(updated);
+                        }}
+                        placeholder={`Attendee ${idx + 1} Full Name`}
+                        className="flex-1 bg-slate-50 border border-purple-200 rounded-xl px-3 py-1.5 text-slate-900 text-xs font-semibold focus:outline-none focus:border-emerald-600"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {editingRaffleEntrants.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <span className="font-bold text-slate-700 block">Raffle Entrant Names:</span>
+                    {editingRaffleEntrants.map((ent, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span className="font-bold text-emerald-800 w-16 shrink-0">Raffle #{idx + 1}:</span>
+                        <input 
+                          type="text" 
+                          value={ent.name}
+                          onChange={(e) => {
+                            const updated = [...editingRaffleEntrants];
+                            updated[idx] = { ...updated[idx], name: e.target.value };
+                            setEditingRaffleEntrants(updated);
+                          }}
+                          placeholder={`Raffle Entrant ${idx + 1}`}
+                          className="flex-1 bg-slate-50 border border-purple-200 rounded-xl px-3 py-1.5 text-slate-900 text-xs font-semibold focus:outline-none focus:border-emerald-600"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-[10px] text-purple-900 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Table #{editingBooking.tableNumber} is reserved. To request a table change, contact Nicole or Charlie.</span>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingBooking(null)}
+                    className="py-2 px-3 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingNames}
+                    className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black flex items-center gap-1.5 shadow"
+                  >
+                    <Save className="w-3.5 h-3.5" /> {isSavingNames ? 'Saving...' : 'Save Names'}
+                  </button>
+                </div>
+              </form>
+
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-medium">

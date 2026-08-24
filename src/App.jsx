@@ -113,6 +113,21 @@ export default function App() {
   const totalTicketsSold = bookings.reduce((sum, b) => sum + (Number(b.numTickets) || 0), 0);
   const totalRaffleTicketsSold = bookings.reduce((sum, b) => sum + (Number(b.raffleTicketsCount) || 0), 0);
 
+  // Dynamic table occupancy calculation across 35 tables (10 capacity each = 350 seats)
+  const tableOccupancyMap = {};
+  for (let i = 1; i <= 35; i++) tableOccupancyMap[i] = 0;
+  bookings.forEach(b => {
+    if (b.tableNumber && b.tableNumber >= 1 && b.tableNumber <= 35 && b.tableBookingOption !== 'Raffle Tickets Only') {
+      tableOccupancyMap[b.tableNumber] = (tableOccupancyMap[b.tableNumber] || 0) + (Number(b.numTickets) || 1);
+    }
+  });
+  const fullTablesCount = Object.values(tableOccupancyMap).filter(seats => seats >= 10).length;
+  const availableTablesCount = Math.max(0, 35 - fullTablesCount);
+  const totalSeatsRemaining = Math.max(0, 350 - totalTicketsSold);
+
+  // Post-booking toast state
+  const [bookingSuccessToast, setBookingSuccessToast] = useState(null);
+
   // Guest's own tickets count
   const guestTicketsCount = guestEmail 
     ? bookings.filter(b => (b.email || '').trim().toLowerCase() === guestEmail.trim().toLowerCase()).length 
@@ -231,7 +246,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-black text-slate-900 tracking-tight">Sloan Jooste's Fundraiser Dance</h1>
                 <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  35 Tables
+                  {availableTablesCount} of 35 Tables Available
                 </span>
               </div>
               <p className="text-xs text-purple-900 font-semibold flex flex-wrap items-center gap-1.5">
@@ -361,13 +376,13 @@ export default function App() {
           <>
             <button onClick={() => setActiveTab('guests')} className={activeTab === 'guests' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Guests</button>
             <button onClick={() => setActiveTab('checkin')} className={activeTab === 'checkin' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Check-In</button>
+            <button onClick={() => setIsRaffleWheelOpen(true)} className="text-purple-900 font-black flex items-center gap-1">
+              <Gift className="w-3.5 h-3.5 text-emerald-600" /> Wheel
+            </button>
           </>
         )}
         <button onClick={() => setIsMyTicketsOpen(true)} className="text-purple-950 font-black flex items-center gap-1">
           <Ticket className="w-3.5 h-3.5 text-emerald-600" /> My Passes
-        </button>
-        <button onClick={() => setIsRaffleWheelOpen(true)} className="text-purple-900 font-black flex items-center gap-1">
-          <Gift className="w-3.5 h-3.5 text-emerald-600" /> Wheel
         </button>
       </div>
 
@@ -381,6 +396,43 @@ export default function App() {
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8">
         
+        {/* POST-BOOKING LANDING REDIRECT BANNER */}
+        {bookingSuccessToast && (
+          <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-600 to-green-700 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0">
+                <Check className="w-6 h-6 text-white stroke-[3]" />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-black">
+                  🎉 Booking Confirmed for {bookingSuccessToast.firstName} {bookingSuccessToast.surname}!
+                </h3>
+                <p className="text-xs text-emerald-100 font-medium">
+                  Reference: <strong className="font-mono text-white bg-white/20 px-2 py-0.5 rounded">{getShortReference(bookingSuccessToast)}</strong> • Table #{bookingSuccessToast.tableNumber || 1} • {bookingSuccessToast.numTickets || 1} Seat(s)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                onClick={() => {
+                  setBookingSuccessToast(null);
+                  setIsMyTicketsOpen(true);
+                }}
+                className="px-4 py-2 rounded-xl bg-white text-emerald-900 font-black text-xs hover:bg-emerald-50 transition shadow"
+              >
+                View in My Tickets
+              </button>
+              <button
+                onClick={() => setBookingSuccessToast(null)}
+                className="p-2 rounded-xl hover:bg-white/20 text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* HERO BANNER */}
         <div className="relative rounded-3xl p-6 sm:p-10 glass-card border border-purple-200 overflow-hidden shadow-lg bg-gradient-to-br from-white via-emerald-50/40 to-purple-50/50">
           
@@ -439,16 +491,18 @@ export default function App() {
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => handleOpenBooking('Raffle Tickets Only')}
-                    className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-purple-100 border border-purple-300 text-purple-950 hover:bg-purple-200 text-xs font-bold transition"
+                    className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-black transition shadow"
                   >
-                    Buy Raffle
+                    Buy Raffle Tickets
                   </button>
-                  <button
-                    onClick={() => setIsRaffleWheelOpen(true)}
-                    className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-emerald-600 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md hover:bg-emerald-700 transition"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-white" /> View Wheel
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setIsRaffleWheelOpen(true)}
+                      className="px-3.5 py-2.5 rounded-xl bg-purple-100 border border-purple-300 text-purple-950 hover:bg-purple-200 font-bold text-xs flex items-center gap-1 transition"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-purple-900" /> Admin Wheel
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -470,7 +524,7 @@ export default function App() {
 
             </div>
 
-            {/* Right Fundometer Tracker (Clean Zero Initial State) */}
+            {/* Right Fundometer Tracker */}
             <div className="lg:col-span-5 p-6 rounded-3xl bg-white border border-purple-200 shadow-md space-y-5">
               
               <div className="flex justify-between items-baseline">
@@ -507,8 +561,8 @@ export default function App() {
                 </div>
                 <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200">
                   <Table className="w-4 h-4 text-purple-700 mx-auto mb-1" />
-                  <span className="font-black text-slate-900 block">35 Tables</span>
-                  <span className="text-[10px] text-purple-900 font-semibold">350 Capacity</span>
+                  <span className="font-black text-purple-950 block">{availableTablesCount} Open</span>
+                  <span className="text-[10px] text-purple-900 font-semibold">{totalSeatsRemaining} Seats Left</span>
                 </div>
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
                   <Gift className="w-4 h-4 text-emerald-700 mx-auto mb-1" />
@@ -968,9 +1022,10 @@ export default function App() {
           isOpen={isBookingOpen}
           onClose={() => setIsBookingOpen(false)}
           defaultOption={bookingDefaultOption}
+          bookings={bookings}
           onBookingComplete={(newBooking) => {
             handleAddBooking(newBooking);
-            setActiveBookingTicket(newBooking);
+            setBookingSuccessToast(newBooking);
           }}
         />
       )}
@@ -992,6 +1047,7 @@ export default function App() {
           currentEmail={guestEmail}
           onEmailChange={handleGuestEmailChange}
           onOpenBooking={handleOpenBooking}
+          onUpdateBooking={handleUpdateBooking}
           onSelectTicketPass={(b) => {
             setIsMyTicketsOpen(false);
             setActiveBookingTicket(b);
