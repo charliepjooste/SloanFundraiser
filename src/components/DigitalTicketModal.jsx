@@ -1,26 +1,20 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
   X, 
   Printer, 
   CheckCircle, 
-  Calendar, 
   MapPin, 
   Table, 
-  Gift, 
   Mail, 
   MessageCircle, 
   Send, 
   ExternalLink,
-  Sparkles,
   CreditCard,
   Image,
-  Download,
   Copy,
   FileText
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { 
   EVENT_DETAILS, 
   getShortReference,
@@ -29,12 +23,12 @@ import {
   generateHtmlTicketEmail,
   resendTicketEmail 
 } from '../firebase';
+import { downloadTicketPdf } from '../utils/generatePdfTicket';
 
 export default function DigitalTicketModal({ booking, onClose }) {
   const [emailStatus, setEmailStatus] = useState('');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [copiedHtml, setCopiedHtml] = useState(false);
-  const ticketCardRef = useRef(null);
 
   if (!booking) return null;
 
@@ -50,39 +44,14 @@ export default function DigitalTicketModal({ booking, onClose }) {
     raffleTickets: booking.raffleTicketsCount || 0
   });
 
-  // Export pixel-perfect downloadable PDF
+  // Export 100% reliable standalone PDF
   const handleDownloadPdf = async () => {
-    if (!ticketCardRef.current || isGeneratingPdf) return;
+    if (isGeneratingPdf) return;
     setIsGeneratingPdf(true);
     setEmailStatus('⏳ Generating official PDF ticket...');
 
     try {
-      const element = ticketCardRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgWidth = 180;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const xPos = (pdfWidth - imgWidth) / 2;
-      const yPos = 12;
-
-      pdf.addImage(imgData, 'PNG', xPos, yPos, imgWidth, Math.min(imgHeight, pdfHeight - 20));
-      pdf.save(`Sloan_Jooste_Ticket_${ticketRef}.pdf`);
-
+      await downloadTicketPdf(booking);
       setEmailStatus(`✅ PDF Ticket downloaded: Sloan_Jooste_Ticket_${ticketRef}.pdf`);
       setTimeout(() => setEmailStatus(''), 4000);
     } catch (err) {
@@ -188,8 +157,8 @@ export default function DigitalTicketModal({ booking, onClose }) {
         {/* Scrollable Container with Printable Ticket Element */}
         <div className="p-6 space-y-5 text-slate-800 max-h-[70vh] overflow-y-auto">
           
-          {/* THE DIGITAL TICKET PASS CARD (Captured for PDF & Print) */}
-          <div ref={ticketCardRef} className="p-5 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-4">
+          {/* THE DIGITAL TICKET PASS CARD */}
+          <div className="p-5 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-4">
             
             {/* Header in ticket */}
             <div className="text-center space-y-1">
@@ -277,7 +246,7 @@ export default function DigitalTicketModal({ booking, onClose }) {
               </div>
             </div>
 
-            {/* Buy Extra Raffle Tickets via EFT */}
+            {/* Buy Extra Raffle Tickets via EFT (FNB) */}
             <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200 space-y-2 text-xs">
               <div className="flex items-center gap-1.5 font-black text-purple-950 text-xs">
                 <CreditCard className="w-4 h-4 text-emerald-600" />
@@ -288,7 +257,8 @@ export default function DigitalTicketModal({ booking, onClose }) {
               </p>
               <div className="p-2.5 rounded-xl bg-white border border-purple-200 space-y-1 font-mono text-[11px] text-slate-900">
                 <div><strong className="font-sans text-purple-900">Bank:</strong> {EVENT_DETAILS.banking.bank}</div>
-                <div><strong className="font-sans text-purple-900">Account Name:</strong> {EVENT_DETAILS.banking.accountName}</div>
+                <div><strong className="font-sans text-purple-900">Account Holder:</strong> {EVENT_DETAILS.banking.accountHolder}</div>
+                <div><strong className="font-sans text-purple-900">Account Type:</strong> {EVENT_DETAILS.banking.accountType}</div>
                 <div><strong className="font-sans text-purple-900">Account No:</strong> {EVENT_DETAILS.banking.accountNumber}</div>
                 <div><strong className="font-sans text-purple-900">Branch Code:</strong> {EVENT_DETAILS.banking.branchCode}</div>
                 <div className="text-emerald-900 font-black bg-emerald-50 p-1 rounded">

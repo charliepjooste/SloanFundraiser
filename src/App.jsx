@@ -19,10 +19,23 @@ import {
   Mail,
   Download,
   Image,
-  Phone
+  Phone,
+  Lock,
+  LogOut,
+  UserCheck,
+  RotateCcw,
+  CheckCircle,
+  CreditCard
 } from 'lucide-react';
 
-import { subscribeBookings, subscribeTables, EVENT_DETAILS, generateWhatsAppMessage } from './firebase';
+import { 
+  subscribeBookings, 
+  subscribeTables, 
+  EVENT_DETAILS, 
+  generateWhatsAppMessage,
+  deleteGuestRecord,
+  isUserAdmin
+} from './firebase';
 import BookingWizard from './components/BookingWizard';
 import TableMapVisualizer from './components/TableMapVisualizer';
 import SeatingArrangementTab from './components/SeatingArrangementTab';
@@ -31,6 +44,8 @@ import CheckInPortal from './components/CheckInPortal';
 import DigitalTicketModal from './components/DigitalTicketModal';
 import GeminiConcierge from './components/GeminiConcierge';
 import RaffleWheelModal from './components/RaffleWheelModal';
+import MyTicketsModal from './components/MyTicketsModal';
+import AdminLoginModal from './components/AdminLoginModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'seating', 'guests', 'checkin', 'wall'
@@ -40,86 +55,43 @@ export default function App() {
   const [activeBookingTicket, setActiveBookingTicket] = useState(null);
   const [selectedFlyerModal, setSelectedFlyerModal] = useState(null);
   
-  // Real-time Firestore State
+  // Two Types of Accounts: Admin vs Guest
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  
+  // Guest / Ticket Buyer Account
+  const [guestEmail, setGuestEmail] = useState('');
+  const [isMyTicketsOpen, setIsMyTicketsOpen] = useState(false);
+
+  // Real-time Firestore State (Starts at ZERO)
   const [bookings, setBookings] = useState([]);
   const [tablesData, setTablesData] = useState([]);
   const [shareCopied, setShareCopied] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
-  // Seed data for Sloan Jooste's Fundraiser Dance
-  const mockBookingsSeed = [
-    {
-      id: 'BK-92810',
-      firstName: 'Eleanor',
-      surname: 'Vance',
-      email: 'eleanor@example.com',
-      mobileNumber: '+27 82 555 0192',
-      numTickets: 10,
-      raffleTicketsCount: 3,
-      tableBookingOption: 'Full Private Table (10 Guests)',
-      tableNumber: 1,
-      guestNames: [
-        'Eleanor Vance', 'Thomas Vance', 'Sarah Jenkins', 'Robert Jenkins', 
-        'David Ross', 'Emily Ross', 'Michael Green', 'Lisa Green', 
-        'Patrick Wood', 'Claire Wood'
-      ],
-      specialRequests: 'Tribute: "Sloan, your courage lights up our hearts! Excited for the Raffle Draw!"',
-      consentTerms: true,
-      paymentStatus: 'paid',
-      paymentMethod: 'card',
-      amount: 1600,
-      checkedIn: true,
-      checkedInAt: new Date(Date.now() - 3600000).toISOString(),
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 'BK-83712',
-      firstName: 'Marcus',
-      surname: 'Sterling',
-      email: 'marcus@example.com',
-      mobileNumber: '+27 83 444 8812',
-      numTickets: 2,
-      raffleTicketsCount: 3,
-      tableBookingOption: 'Standard Dance Ticket',
-      tableNumber: 3,
-      guestNames: ['Marcus Sterling', 'Elena Sterling'],
-      specialRequests: 'Tribute: "With deepest love and support for Sloan\'s care journey."',
-      consentTerms: true,
-      paymentStatus: 'paid',
-      paymentMethod: 'card',
-      amount: 400,
-      checkedIn: false,
-      checkedInAt: null,
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 'BK-77192',
-      firstName: 'Sophia',
-      surname: 'Chen',
-      email: 'sophia@example.com',
-      mobileNumber: '+27 71 333 9988',
-      numTickets: 4,
-      raffleTicketsCount: 1,
-      tableBookingOption: 'Standard Dance Ticket',
-      tableNumber: 2,
-      guestNames: ['Sophia Chen', 'Wei Chen', 'Lucas Chen', 'Maya Chen'],
-      specialRequests: 'Seating near dancefloor requested',
-      consentTerms: true,
-      paymentStatus: 'paid',
-      paymentMethod: 'eft',
-      amount: 650,
-      checkedIn: true,
-      checkedInAt: new Date(Date.now() - 1800000).toISOString(),
-      createdAt: new Date().toISOString()
+  // Load saved session
+  useEffect(() => {
+    const savedAdmin = localStorage.getItem('sloan_admin_authenticated');
+    const savedAdminEmail = localStorage.getItem('sloan_admin_email');
+    if (savedAdmin === 'true' && savedAdminEmail) {
+      setIsAdmin(true);
+      setAdminEmail(savedAdminEmail);
     }
-  ];
+
+    const savedGuestEmail = localStorage.getItem('sloan_guest_email');
+    if (savedGuestEmail) {
+      setGuestEmail(savedGuestEmail);
+    }
+  }, []);
 
   useEffect(() => {
-    // Subscribe to Firestore Bookings
+    // Subscribe to Firestore Bookings (Zero default)
     const unsubscribeBookings = subscribeBookings((data) => {
-      if (data && data.length > 0) {
+      if (data) {
         setBookings(data);
       } else {
-        setBookings(mockBookingsSeed);
+        setBookings([]);
       }
     });
 
@@ -134,11 +106,17 @@ export default function App() {
     };
   }, []);
 
-  // Total funds raised & stats calculation in ZAR (R)
-  const totalAmountRaised = bookings.reduce((sum, b) => sum + (Number(b.amount) || 0), 0) + 42500;
+  // Total funds raised & stats calculation in ZAR (R) - Starts completely at 0
+  const totalAmountRaised = bookings.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
   const targetGoal = 100000;
   const progressPercent = Math.min(100, Math.round((totalAmountRaised / targetGoal) * 100));
-  const totalTicketsSold = bookings.reduce((sum, b) => sum + (Number(b.numTickets) || 1), 0) + 140;
+  const totalTicketsSold = bookings.reduce((sum, b) => sum + (Number(b.numTickets) || 0), 0);
+  const totalRaffleTicketsSold = bookings.reduce((sum, b) => sum + (Number(b.raffleTicketsCount) || 0), 0);
+
+  // Guest's own tickets count
+  const guestTicketsCount = guestEmail 
+    ? bookings.filter(b => (b.email || '').trim().toLowerCase() === guestEmail.trim().toLowerCase()).length 
+    : 0;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -149,6 +127,24 @@ export default function App() {
   const handleOpenBooking = (option = 'Standard Dance Ticket') => {
     setBookingDefaultOption(option);
     setIsBookingOpen(true);
+  };
+
+  const handleAdminLoginSuccess = (email) => {
+    setIsAdmin(true);
+    setAdminEmail(email);
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    setAdminEmail('');
+    localStorage.removeItem('sloan_admin_authenticated');
+    localStorage.removeItem('sloan_admin_email');
+    setActiveTab('overview');
+  };
+
+  const handleGuestEmailChange = (email) => {
+    setGuestEmail(email);
+    localStorage.setItem('sloan_guest_email', email);
   };
 
   // Instant local state updaters
@@ -162,6 +158,29 @@ export default function App() {
 
   const handleAddBooking = (newBooking) => {
     setBookings(prev => [newBooking, ...prev]);
+    if (newBooking.email) {
+      handleGuestEmailChange(newBooking.email);
+    }
+  };
+
+  // Reset / Clear All Bookings to ZERO
+  const handleResetAllToZero = async () => {
+    if (!window.confirm("⚠️ ARE YOU SURE? This will permanently delete all current tickets and reset funds raised to R0.")) {
+      return;
+    }
+    setIsResetting(true);
+    try {
+      for (const b of bookings) {
+        await deleteGuestRecord(b.id);
+      }
+      setBookings([]);
+      alert("✅ All guest records have been cleared. Application is now 100% blank at R0.");
+    } catch (e) {
+      console.error(e);
+      alert("Error clearing records");
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   const shareViaWhatsAppGeneral = () => {
@@ -172,7 +191,34 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-900 selection:bg-emerald-500 selection:text-white">
       
-      {/* Top Header */}
+      {/* Top Admin Status Bar (if logged in as admin) */}
+      {isAdmin && (
+        <div className="bg-purple-950 text-purple-100 text-xs px-4 py-1.5 flex items-center justify-between border-b border-purple-800">
+          <div className="flex items-center gap-2 font-bold">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>🛡️ Admin Console: <strong className="text-white font-mono">{adminEmail}</strong></span>
+            <span className="hidden sm:inline text-purple-300">• Full Management Access (35 Tables & Check-In)</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleResetAllToZero}
+              disabled={isResetting || bookings.length === 0}
+              className="text-[11px] font-bold text-rose-300 hover:text-rose-100 flex items-center gap-1 transition disabled:opacity-40"
+              title="Clear all bookings and reset to zero"
+            >
+              <RotateCcw className="w-3 h-3" /> Reset Database (R0)
+            </button>
+            <button 
+              onClick={handleAdminLogout}
+              className="text-[11px] font-bold text-purple-300 hover:text-white flex items-center gap-1 transition"
+            >
+              <LogOut className="w-3 h-3" /> Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Top Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-purple-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           
@@ -202,24 +248,38 @@ export default function App() {
             >
               Overview & Cause
             </button>
-            <button
-              onClick={() => setActiveTab('seating')}
-              className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'seating' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
-            >
-              Seating (35 Tables)
-            </button>
-            <button
-              onClick={() => setActiveTab('guests')}
-              className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'guests' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
-            >
-              Guest & Ticket Manager
-            </button>
-            <button
-              onClick={() => setActiveTab('checkin')}
-              className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'checkin' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
-            >
-              Door Check-In
-            </button>
+            
+            {/* Admin-only Tabs */}
+            {isAdmin ? (
+              <>
+                <button
+                  onClick={() => setActiveTab('seating')}
+                  className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'seating' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
+                >
+                  Seating (35 Tables)
+                </button>
+                <button
+                  onClick={() => setActiveTab('guests')}
+                  className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'guests' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
+                >
+                  Guest & Ticket Manager
+                </button>
+                <button
+                  onClick={() => setActiveTab('checkin')}
+                  className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'checkin' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
+                >
+                  Door Check-In
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setActiveTab('seating')}
+                className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'seating' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
+              >
+                35 Tables Map
+              </button>
+            )}
+
             <button
               onClick={() => setActiveTab('wall')}
               className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'wall' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
@@ -228,16 +288,43 @@ export default function App() {
             </button>
           </nav>
 
-          {/* Top Actions */}
+          {/* Top Actions: My Tickets, Admin Login, WhatsApp, Get Tickets */}
           <div className="flex items-center gap-2">
+            
+            {/* Customer "My Tickets" Button */}
             <button
-              onClick={() => setIsRaffleWheelOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-100 border border-purple-300 text-purple-950 hover:bg-purple-200 text-xs font-black transition shadow-sm"
-              title="Launch Projector Raffle Wheel"
+              onClick={() => setIsMyTicketsOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 hover:bg-purple-100 text-xs font-black transition shadow-sm"
+              title="View my bought tickets and download PDF"
             >
-              <Gift className="w-4 h-4 text-emerald-600" />
-              <span>Projector Wheel</span>
+              <Ticket className="w-4 h-4 text-emerald-600" />
+              <span>My Tickets</span>
+              {guestTicketsCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-emerald-600 text-white text-[10px] font-mono">
+                  {guestTicketsCount}
+                </span>
+              )}
             </button>
+
+            {/* Admin Sign In / Badge */}
+            {!isAdmin ? (
+              <button
+                onClick={() => setIsAdminLoginOpen(true)}
+                className="hidden sm:flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 transition"
+                title="Admin Login for Organizers"
+              >
+                <Lock className="w-3.5 h-3.5 text-purple-700" /> Admin
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsRaffleWheelOpen(true)}
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-100 border border-purple-300 text-purple-950 hover:bg-purple-200 text-xs font-black transition shadow-sm"
+                title="Launch Projector Raffle Wheel"
+              >
+                <Gift className="w-4 h-4 text-emerald-600" />
+                <span>Projector Wheel</span>
+              </button>
+            )}
 
             <button
               onClick={shareViaWhatsAppGeneral}
@@ -270,9 +357,15 @@ export default function App() {
       <div className="lg:hidden flex items-center justify-around bg-white border-b border-purple-200 p-2 text-xs font-bold overflow-x-auto shadow-sm">
         <button onClick={() => setActiveTab('overview')} className={activeTab === 'overview' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Overview</button>
         <button onClick={() => setActiveTab('seating')} className={activeTab === 'seating' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>35 Tables</button>
-        <button onClick={() => setActiveTab('guests')} className={activeTab === 'guests' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Guests</button>
-        <button onClick={() => setActiveTab('checkin')} className={activeTab === 'checkin' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Check-In</button>
-        <button onClick={() => setActiveTab('wall')} className={activeTab === 'wall' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Wall</button>
+        {isAdmin && (
+          <>
+            <button onClick={() => setActiveTab('guests')} className={activeTab === 'guests' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Guests</button>
+            <button onClick={() => setActiveTab('checkin')} className={activeTab === 'checkin' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Check-In</button>
+          </>
+        )}
+        <button onClick={() => setIsMyTicketsOpen(true)} className="text-purple-950 font-black flex items-center gap-1">
+          <Ticket className="w-3.5 h-3.5 text-emerald-600" /> My Passes
+        </button>
         <button onClick={() => setIsRaffleWheelOpen(true)} className="text-purple-900 font-black flex items-center gap-1">
           <Gift className="w-3.5 h-3.5 text-emerald-600" /> Wheel
         </button>
@@ -335,10 +428,10 @@ export default function App() {
                   <div>
                     <h3 className="text-sm font-black text-purple-950 flex items-center gap-2">
                       Grand Charity Raffle Draw (21:00 – 21:30)
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold">R11,520 Prize Pool</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold">7 Grand Prizes</span>
                     </h3>
                     <p className="text-xs text-slate-600 mt-0.5">
-                      7 Official Prizes • Whole Lamb Grand Prize drawn last! R50/1 or R100/3 tickets.
+                      Grand Prize Whole Lamb drawn LAST! Tickets R50 for 1 • R100 for 3.
                     </p>
                   </div>
                 </div>
@@ -354,7 +447,7 @@ export default function App() {
                     onClick={() => setIsRaffleWheelOpen(true)}
                     className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-emerald-600 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md hover:bg-emerald-700 transition"
                   >
-                    <Play className="w-3.5 h-3.5 fill-white" /> Spin Wheel
+                    <Play className="w-3.5 h-3.5 fill-white" /> View Wheel
                   </button>
                 </div>
               </div>
@@ -368,16 +461,16 @@ export default function App() {
                   <Ticket className="w-5 h-5" /> Book Dance Tickets (R150)
                 </button>
                 <button
-                  onClick={() => setActiveTab('seating')}
-                  className="px-5 py-3 rounded-2xl bg-white border border-purple-200 text-slate-800 font-extrabold text-sm hover:bg-slate-50 transition flex items-center gap-2 shadow-sm"
+                  onClick={() => setIsMyTicketsOpen(true)}
+                  className="px-5 py-3 rounded-2xl bg-white border border-purple-200 text-purple-950 font-extrabold text-sm hover:bg-purple-50 transition flex items-center gap-2 shadow-sm"
                 >
-                  <Table className="w-4 h-4 text-emerald-600" /> View 35 Tables Seating
+                  <Ticket className="w-4 h-4 text-emerald-600" /> My Bought Tickets
                 </button>
               </div>
 
             </div>
 
-            {/* Right Fundometer Tracker */}
+            {/* Right Fundometer Tracker (Clean Zero Initial State) */}
             <div className="lg:col-span-5 p-6 rounded-3xl bg-white border border-purple-200 shadow-md space-y-5">
               
               <div className="flex justify-between items-baseline">
@@ -400,7 +493,7 @@ export default function App() {
                 <div className="w-full h-3.5 rounded-full bg-slate-100 p-0.5 border border-purple-200 overflow-hidden">
                   <div 
                     className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-600 transition-all duration-1000 shadow-sm"
-                    style={{ width: `${progressPercent}%` }}
+                    style={{ width: `${Math.max(progressPercent, 1)}%` }}
                   ></div>
                 </div>
               </div>
@@ -419,12 +512,12 @@ export default function App() {
                 </div>
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
                   <Gift className="w-4 h-4 text-emerald-700 mx-auto mb-1" />
-                  <span className="font-black text-slate-900 block">21:00</span>
-                  <span className="text-[10px] text-slate-500 font-semibold">Raffle Draw</span>
+                  <span className="font-black text-slate-900 block">{totalRaffleTicketsSold}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold">Raffle Tickets</span>
                 </div>
               </div>
 
-              {/* Bring Your Own Notice */}
+              {/* Bring Your Own Notice & Official Bank Info */}
               <div className="p-3 rounded-2xl bg-purple-50/70 border border-purple-200 text-xs text-purple-950 font-bold text-center">
                 🧺 Bring Your Own Platter & XYZ (Drinks & Snacks Welcome)
               </div>
@@ -449,31 +542,31 @@ export default function App() {
               onClick={shareViaWhatsAppGeneral}
               className="px-3.5 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 font-extrabold text-xs flex items-center gap-1.5 transition self-start sm:self-auto shadow-sm"
             >
-              <MessageCircle className="w-4 h-4 text-emerald-700" /> Share All on WhatsApp
+              <MessageCircle className="w-4 h-4 text-emerald-700" /> Share Flyers on WhatsApp
             </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             
-            {/* Flyer 1: Sloan Fundraiser */}
+            {/* Flyer 1: Sloan Fundraiser Main */}
             <div className="rounded-3xl border border-purple-200 bg-white p-3 shadow-sm hover:shadow-md transition space-y-2 group">
               <div 
-                onClick={() => setSelectedFlyerModal({ src: '/flyer_sloan.jpg', title: 'Fundraiser for Sloan - Official Event Flyer' })}
+                onClick={() => setSelectedFlyerModal({ src: '/flyer_sloan.jpg', title: "Sloan Jooste's Fundraiser Dance" })}
                 className="rounded-2xl overflow-hidden cursor-pointer relative aspect-[3/4] bg-slate-100"
               >
-                <img src="/flyer_sloan.jpg" alt="Fundraiser for Sloan" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                <img src="/flyer_sloan.jpg" alt="Sloan Fundraiser Dance" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
                 <div className="absolute inset-0 bg-slate-900/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
                   <span className="px-3 py-1.5 rounded-xl bg-white/90 text-slate-900 text-xs font-black shadow">Click to View</span>
                 </div>
               </div>
               <div className="flex items-center justify-between pt-1">
                 <div>
-                  <span className="font-extrabold text-xs text-slate-900 block">Main Event Flyer</span>
-                  <span className="text-[10px] text-emerald-700 font-bold">Fundraiser for Sloan</span>
+                  <span className="font-extrabold text-xs text-slate-900 block">Main Event & Raffle Flyer</span>
+                  <span className="text-[10px] text-emerald-700 font-bold">Official Poster</span>
                 </div>
                 <a 
                   href="/flyer_sloan.jpg" 
-                  download="Sloan_Jooste_Fundraiser_Flyer.jpg"
+                  download="Sloan_Jooste_Fundraiser_Dance.jpg"
                   className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
                   title="Download Flyer"
                 >
@@ -485,7 +578,7 @@ export default function App() {
             {/* Flyer 2: DJ Cool J */}
             <div className="rounded-3xl border border-purple-200 bg-white p-3 shadow-sm hover:shadow-md transition space-y-2 group">
               <div 
-                onClick={() => setSelectedFlyerModal({ src: '/flyer_dj_cool_j.jpg', title: 'Official DJ Announcement - DJ Cool J' })}
+                onClick={() => setSelectedFlyerModal({ src: '/flyer_dj_cool_j.jpg', title: 'Official DJ - DJ Cool J' })}
                 className="rounded-2xl overflow-hidden cursor-pointer relative aspect-[3/4] bg-slate-100"
               >
                 <img src="/flyer_dj_cool_j.jpg" alt="DJ Cool J" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
@@ -495,8 +588,8 @@ export default function App() {
               </div>
               <div className="flex items-center justify-between pt-1">
                 <div>
-                  <span className="font-extrabold text-xs text-slate-900 block">Official DJ Announcement</span>
-                  <span className="text-[10px] text-purple-800 font-bold">DJ Cool J</span>
+                  <span className="font-extrabold text-xs text-slate-900 block">Official DJ Entertainment</span>
+                  <span className="text-[10px] text-emerald-700 font-bold">DJ Cool J</span>
                 </div>
                 <a 
                   href="/flyer_dj_cool_j.jpg" 
@@ -569,231 +662,183 @@ export default function App() {
                       <p className="text-[11px] text-slate-500 font-medium">Cerebral Palsy rehabilitation</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200">
-                      <span className="text-purple-900 font-black text-lg">25%</span>
-                      <p className="font-black text-slate-900 mt-1">Care & Mobility Equipment</p>
-                      <p className="text-[11px] text-slate-500 font-medium">Assistive technology support</p>
+                      <span className="text-purple-700 font-black text-lg">25%</span>
+                      <p className="font-black text-slate-900 mt-1">Specialized Care & Devices</p>
+                      <p className="text-[11px] text-slate-500 font-medium">Mobility & recovery equipment</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                      <span className="text-emerald-700 font-black text-lg">15%</span>
-                      <p className="font-black text-slate-900 mt-1">Educational Support</p>
-                      <p className="text-[11px] text-slate-500 font-medium">Learning accommodations</p>
+                      <span className="text-slate-700 font-black text-lg">15%</span>
+                      <p className="font-black text-slate-900 mt-1">Event & Community Drive</p>
+                      <p className="text-[11px] text-slate-500 font-medium">Hall, setup, and entertainment</p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* 7 Official Raffle Prizes */}
-              <div className="p-6 rounded-3xl bg-white border border-emerald-300 shadow-sm space-y-4">
+              {/* 7 Grand Raffle Prizes Card */}
+              <div className="p-6 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-800">
-                      <Gift className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-black text-slate-900">Grand Raffle Draw (7 Official Prizes)</h3>
-                      <p className="text-xs text-purple-900 font-medium">Friday, 09 October 2026 • Live 15s Wheel Spin (Whole Lamb Drawn Last!)</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setIsRaffleWheelOpen(true)}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-1.5 shadow-md transition"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-white" /> Open Wheel
-                  </button>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200 flex items-center justify-between text-sm">
-                  <div>
-                    <span className="font-black text-purple-950">Raffle Draw Time:</span>
-                    <p className="text-xs text-slate-600 mt-0.5">Tickets: R50 for 1 or R100 for 3. 1 Ticket = 1 Wheel Slice!</p>
-                  </div>
-                  <span className="font-mono font-black text-emerald-800 text-base shrink-0 px-3 py-1.5 bg-white rounded-xl border border-emerald-300 shadow-sm">
-                    21:00 – 21:30
+                  <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <Gift className="w-5 h-5 text-emerald-600" />
+                    7 Official Charity Raffle Prizes
+                  </h3>
+                  <span className="text-xs font-black px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    Grand Prize Drawn Last
                   </span>
                 </div>
 
-                {/* 7 Prizes List */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🥩</span>
-                      <div>
-                        <span className="font-black text-slate-900 block text-xs">Whole Lamb (Grand Finale Prize)</span>
-                        <span className="text-[10px] text-emerald-700 font-black">Drawn Last (#7)!</span>
-                      </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  
+                  {/* Prize 1 */}
+                  <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200 flex items-center justify-between">
+                    <div>
+                      <span className="font-mono text-[10px] text-purple-900 font-bold">PRIZE #1</span>
+                      <p className="font-black text-slate-900 text-sm">Chivas Regal 13YO Rye Cask</p>
+                      <p className="text-[11px] text-slate-500">American Rye Cask Scotch 1L</p>
                     </div>
-                    <span className="font-black text-emerald-800 text-xs bg-white px-2 py-0.5 rounded border border-emerald-300">R2,000</span>
+                    <span className="px-2.5 py-1 rounded-xl bg-purple-100 text-purple-950 font-black text-xs">R2,000</span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">📸</span>
-                      <div>
-                        <span className="font-black text-slate-900 block text-xs">Photoshoot for a Couple</span>
-                        <span className="text-[10px] text-purple-800 font-medium">Professional Session</span>
-                      </div>
+                  {/* Prize 2 */}
+                  <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200 flex items-center justify-between">
+                    <div>
+                      <span className="font-mono text-[10px] text-purple-900 font-bold">PRIZE #2</span>
+                      <p className="font-black text-slate-900 text-sm">Chivas Regal 13YO Rum Cask</p>
+                      <p className="text-[11px] text-slate-500">Rum Cask Scotch Whisky 1L</p>
                     </div>
-                    <span className="font-black text-purple-900 text-xs bg-white px-2 py-0.5 rounded border border-purple-200">R2,500</span>
+                    <span className="px-2.5 py-1 rounded-xl bg-purple-100 text-purple-950 font-black text-xs">R2,000</span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🥃</span>
-                      <div>
-                        <span className="font-black text-slate-900 block text-xs">Chivas Regal 13YO Rye (1L)</span>
-                        <span className="text-[10px] text-slate-500 font-medium">Scotch Whisky</span>
-                      </div>
+                  {/* Prize 3 */}
+                  <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200 flex items-center justify-between">
+                    <div>
+                      <span className="font-mono text-[10px] text-purple-900 font-bold">PRIZE #3</span>
+                      <p className="font-black text-slate-900 text-sm">Spyced Restaurant Dining</p>
+                      <p className="text-[11px] text-slate-500">Exclusive Dining Experience</p>
                     </div>
-                    <span className="font-black text-slate-900 text-xs bg-white px-2 py-0.5 rounded border border-slate-200">R2,000</span>
+                    <span className="px-2.5 py-1 rounded-xl bg-purple-100 text-purple-950 font-black text-xs">R1,820</span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🍾</span>
-                      <div>
-                        <span className="font-black text-slate-900 block text-xs">Chivas Regal 13YO Rum (1L)</span>
-                        <span className="text-[10px] text-slate-500 font-medium">Scotch Whisky</span>
-                      </div>
+                  {/* Prize 4 */}
+                  <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200 flex items-center justify-between">
+                    <div>
+                      <span className="font-mono text-[10px] text-purple-900 font-bold">PRIZE #4</span>
+                      <p className="font-black text-slate-900 text-sm">Hot Stone Massage #1</p>
+                      <p className="text-[11px] text-slate-500">Radiance Room Spa Session</p>
                     </div>
-                    <span className="font-black text-slate-900 text-xs bg-white px-2 py-0.5 rounded border border-slate-200">R2,000</span>
+                    <span className="px-2.5 py-1 rounded-xl bg-purple-100 text-purple-950 font-black text-xs">R600</span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🍽️</span>
-                      <div>
-                        <span className="font-black text-slate-900 block text-xs">Spyced Restaurant Voucher</span>
-                        <span className="text-[10px] text-slate-500 font-medium">Dining Experience</span>
-                      </div>
+                  {/* Prize 5 */}
+                  <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200 flex items-center justify-between">
+                    <div>
+                      <span className="font-mono text-[10px] text-purple-900 font-bold">PRIZE #5</span>
+                      <p className="font-black text-slate-900 text-sm">Hot Stone Massage #2</p>
+                      <p className="text-[11px] text-slate-500">Radiance Room Spa Session</p>
                     </div>
-                    <span className="font-black text-slate-900 text-xs bg-white px-2 py-0.5 rounded border border-slate-200">R1,820</span>
+                    <span className="px-2.5 py-1 rounded-xl bg-purple-100 text-purple-950 font-black text-xs">R600</span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">💆</span>
-                      <div>
-                        <span className="font-black text-slate-900 block text-xs">Hot Stone Massage (Radiance Room)</span>
-                        <span className="text-[10px] text-slate-500 font-medium">Full Body Spa #1</span>
-                      </div>
+                  {/* Prize 6 */}
+                  <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200 flex items-center justify-between">
+                    <div>
+                      <span className="font-mono text-[10px] text-purple-900 font-bold">PRIZE #6</span>
+                      <p className="font-black text-slate-900 text-sm">Couples Photoshoot</p>
+                      <p className="text-[11px] text-slate-500">Professional Studio / Outdoor Shoot</p>
                     </div>
-                    <span className="font-black text-slate-900 text-xs bg-white px-2 py-0.5 rounded border border-slate-200">R600</span>
+                    <span className="px-2.5 py-1 rounded-xl bg-purple-100 text-purple-950 font-black text-xs">R2,500</span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 sm:col-span-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">💆</span>
-                      <div>
-                        <span className="font-black text-slate-900 block text-xs">Hot Stone Massage (Radiance Room)</span>
-                        <span className="text-[10px] text-slate-500 font-medium">Full Body Spa #2</span>
-                      </div>
+                  {/* Prize 7: GRAND PRIZE */}
+                  <div className="sm:col-span-2 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-500 flex items-center justify-between shadow-sm">
+                    <div>
+                      <span className="font-black text-emerald-800 text-xs flex items-center gap-1">
+                        🏆 GRAND PRIZE (Drawn Last)
+                      </span>
+                      <p className="font-black text-slate-900 text-base">Whole Prepared Lamb</p>
+                      <p className="text-xs text-slate-600 font-medium">Grand prize for our lucky raffle supporter</p>
                     </div>
-                    <span className="font-black text-slate-900 text-xs bg-white px-2 py-0.5 rounded border border-slate-200">R600</span>
+                    <span className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-black text-sm">R2,000</span>
                   </div>
+
+                </div>
+
+                <div className="pt-2 flex items-center justify-between">
+                  <p className="text-xs text-slate-500 font-medium">R50 for 1 Ticket • R100 for 3 Tickets (1 Ticket = 1 Wheel Slice)</p>
+                  <button
+                    onClick={() => handleOpenBooking('Raffle Tickets Only')}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition"
+                  >
+                    Buy Raffle Tickets
+                  </button>
                 </div>
               </div>
 
             </div>
 
-            {/* Right Column: Ticket Packages & Venue Info */}
+            {/* Right Column: Banking Details, Venue & AI Assistant */}
             <div className="space-y-6">
               
-              {/* Ticket Packages */}
-              <div className="p-6 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-4">
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Ticket className="w-5 h-5 text-emerald-600" />
-                  Ticket Packages & Tables
-                </h3>
-                <p className="text-xs text-slate-600 font-medium">
-                  Standard dance tickets, complete private tables of 10, or charity raffle tickets.
-                </p>
-
-                <div className="space-y-2.5 text-xs">
-                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex justify-between items-center">
-                    <div>
-                      <span className="font-black text-slate-900 block">Standard Dance Ticket</span>
-                      <p className="text-[11px] text-slate-500">Single entry pass</p>
-                    </div>
-                    <span className="font-black text-emerald-700 text-base">R150</span>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200 flex justify-between items-center">
-                    <div>
-                      <span className="font-black text-purple-950 block">Full Private Table (10 Guests)</span>
-                      <p className="text-[11px] text-purple-800">Dedicated table for 10 people</p>
-                    </div>
-                    <span className="font-black text-emerald-700 text-base">R1,500</span>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex justify-between items-center">
-                    <div>
-                      <span className="font-black text-emerald-900 block">Raffle Ticket Packs</span>
-                      <p className="text-[11px] text-emerald-800">R50 for 1 • R100 for 3</p>
-                    </div>
-                    <span className="font-black text-emerald-700 text-base">R50 / R100</span>
-                  </div>
+              {/* Official FNB Banking Details Box */}
+              <div className="p-6 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-emerald-600" />
+                  <h4 className="font-black text-slate-900 text-sm">Official Bank Account for EFT</h4>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    onClick={() => handleOpenBooking('Standard Dance Ticket')}
-                    className="py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md transition"
-                  >
-                    <Ticket className="w-4 h-4" /> Book Tickets
-                  </button>
-                  <button
-                    onClick={() => handleOpenBooking('Raffle Tickets Only')}
-                    className="py-3 rounded-2xl bg-purple-900 hover:bg-purple-950 text-white font-black text-xs flex items-center justify-center gap-1.5 transition"
-                  >
-                    <Gift className="w-4 h-4 text-emerald-400" /> Buy Raffle
-                  </button>
+                <p className="text-slate-600 font-medium">
+                  You can purchase additional raffle tickets via EFT directly to the fundraiser account:
+                </p>
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-purple-200 space-y-1.5 font-mono text-slate-900">
+                  <div><strong className="font-sans text-purple-900">Bank:</strong> {EVENT_DETAILS.banking.bank}</div>
+                  <div><strong className="font-sans text-purple-900">Account Holder:</strong> {EVENT_DETAILS.banking.accountHolder}</div>
+                  <div><strong className="font-sans text-purple-900">Account Type:</strong> {EVENT_DETAILS.banking.accountType}</div>
+                  <div><strong className="font-sans text-purple-900">Account Number:</strong> {EVENT_DETAILS.banking.accountNumber}</div>
+                  <div><strong className="font-sans text-purple-900">Branch Code:</strong> {EVENT_DETAILS.banking.branchCode}</div>
+                  <div className="pt-1 text-[11px] text-emerald-800 font-bold font-sans">
+                    Ref: [Your Ticket Ref e.g. SJ-XXXX or Name]
+                  </div>
                 </div>
               </div>
 
-              {/* Event Location & Contact Details */}
-              <div className="p-6 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-3.5 text-xs">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="font-black text-slate-900 flex items-center gap-1.5 text-sm">
-                    <MapPin className="w-4 h-4 text-emerald-600" /> Venue & Event Details
-                  </span>
-                  <a 
-                    href={EVENT_DETAILS.googleMapsUrl}
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold text-[11px] flex items-center gap-1 hover:bg-emerald-100 transition"
-                  >
-                    Google Maps <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-
-                <p className="text-slate-900 font-black text-sm">{EVENT_DETAILS.venue}</p>
+              {/* Event Location Card */}
+              <div className="p-6 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-3 text-xs">
+                <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-emerald-600" />
+                  Venue & Driving Directions
+                </h4>
+                <p className="font-bold text-slate-900">{EVENT_DETAILS.venue}</p>
                 <p className="text-slate-600 font-medium">{EVENT_DETAILS.address}</p>
                 
-                <div className="space-y-1 pt-1 text-[11px] text-purple-950 font-semibold border-t border-slate-100">
-                  <div>📅 <strong>Date:</strong> {EVENT_DETAILS.date}</div>
-                  <div>⏰ <strong>Time:</strong> {EVENT_DETAILS.time}</div>
-                  <div>🎟️ <strong>Raffle Draw:</strong> {EVENT_DETAILS.raffleTime}</div>
-                  <div>👗 <strong>Dress Code:</strong> {EVENT_DETAILS.dressCode}</div>
-                  <div>🧺 <strong>Refreshments:</strong> {EVENT_DETAILS.byo}</div>
-                  <div>🎵 <strong>Live Music:</strong> {EVENT_DETAILS.entertainment}</div>
-                  <div>🪑 <strong>Capacity:</strong> 35 Tables (350 Guests Total)</div>
-                </div>
+                <a 
+                  href={EVENT_DETAILS.googleMapsUrl}
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="w-full py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold flex items-center justify-center gap-1.5 transition"
+                >
+                  Open in Google Maps <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
 
-                {/* Organizer Contacts */}
-                <div className="pt-2 border-t border-slate-100 space-y-1 text-[11px]">
-                  <span className="font-bold text-slate-900 block">Event Organizers / Questions:</span>
-                  <div className="flex flex-col gap-1 text-slate-700 font-medium">
-                    <a href="tel:0711134812" className="hover:text-emerald-700 flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-emerald-600" /> Nicole Jooste: 071 113 4812
-                    </a>
-                    <a href="tel:0795285350" className="hover:text-emerald-700 flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-emerald-600" /> Marsha Beukes: 079 528 5350
-                    </a>
+              {/* Event Organizers Contact */}
+              <div className="p-6 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-2 text-xs">
+                <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-purple-700" />
+                  Organizing Committee
+                </h4>
+                <div className="space-y-1.5 font-medium text-slate-700">
+                  <div className="flex justify-between items-center">
+                    <span>Nicole Jooste:</span>
+                    <a href="tel:0711134812" className="font-bold text-emerald-700">071 113 4812</a>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Marsha Beukes:</span>
+                    <a href="tel:0795285350" className="font-bold text-emerald-700">079 528 5350</a>
                   </div>
                 </div>
-
               </div>
+
+              {/* AI Concierge */}
+              <GeminiConcierge />
 
             </div>
 
@@ -810,8 +855,8 @@ export default function App() {
           />
         )}
 
-        {/* TAB 3: GUEST & TICKET MANAGER */}
-        {activeTab === 'guests' && (
+        {/* TAB 3: GUEST & TICKET MANAGER (Admin Only) */}
+        {activeTab === 'guests' && isAdmin && (
           <GuestManagementTab 
             bookings={bookings}
             tablesData={tablesData}
@@ -822,8 +867,8 @@ export default function App() {
           />
         )}
 
-        {/* TAB 4: DOOR CHECK-IN DESK */}
-        {activeTab === 'checkin' && (
+        {/* TAB 4: DOOR CHECK-IN DESK (Admin Only) */}
+        {activeTab === 'checkin' && isAdmin && (
           <CheckInPortal 
             bookings={bookings} 
             onViewTicketPass={(booking) => setActiveBookingTicket(booking)}
@@ -849,114 +894,163 @@ export default function App() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {bookings.map((b) => (
-                <div key={b.id} className="p-5 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-black text-slate-900 text-sm">{b.firstName} {b.surname}</h4>
-                      <span className="text-[11px] text-emerald-700 font-bold">
-                        {b.tableBookingOption === 'Raffle Tickets Only' ? '🎟️ Raffle Supporter' : `Table #${b.tableNumber} • ${b.tableBookingOption}`}
+            {bookings.length === 0 ? (
+              <div className="p-12 text-center rounded-3xl bg-white border border-purple-200 space-y-3">
+                <Heart className="w-12 h-12 text-emerald-600/30 mx-auto" />
+                <h4 className="font-extrabold text-slate-700 text-sm">Be the first to leave a message of support!</h4>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Book a ticket or support Sloan's raffle to leave an encouraging message on the Wall of Support.
+                </p>
+                <button
+                  onClick={() => handleOpenBooking('Standard Dance Ticket')}
+                  className="px-5 py-2.5 rounded-2xl bg-emerald-600 text-white font-black text-xs shadow-md hover:bg-emerald-700 transition"
+                >
+                  Book Tickets & Leave Message
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {bookings.map((b) => (
+                  <div key={b.id} className="p-5 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-black text-slate-900 text-sm">{b.firstName} {b.surname}</h4>
+                        <span className="text-[11px] text-emerald-700 font-bold">
+                          {b.tableBookingOption === 'Raffle Tickets Only' ? '🎟️ Raffle Supporter' : `Table #${b.tableNumber} • ${b.tableBookingOption}`}
+                        </span>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-black">
+                        R{b.amount}
                       </span>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-black">
-                      R{b.amount}
-                    </span>
-                  </div>
 
-                  <p className="text-xs text-slate-700 italic bg-slate-50 p-3 rounded-2xl border border-purple-100">
-                    "{b.specialRequests || 'Supporting Sloan with strength, love, and prayers!'}"
-                  </p>
+                    <p className="text-xs text-slate-600 italic bg-purple-50/50 p-3 rounded-2xl border border-purple-100 font-medium">
+                      "{b.specialRequests || 'Honoured to support Sloan on this inspiring care journey!'}"
+                    </p>
 
-                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold pt-1">
-                    <span>Verified Supporter</span>
-                    <span>{new Date(b.createdAt).toLocaleDateString()}</span>
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100">
+                      <span>{b.numTickets || 1} Seat(s) Reserved</span>
+                      <span>{new Date(b.createdAt || Date.now()).toLocaleDateString()}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-purple-200 py-8 bg-white text-slate-600 text-xs mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-slate-900 font-black">
-            <img src="/flyer_sloan.jpg" alt="Sloan Logo" className="w-6 h-6 rounded-full object-cover border border-emerald-500" />
-            <span>Sloan Jooste's Fundraiser Dance Platform</span>
-          </div>
-          <div className="text-center sm:text-right text-[11px] text-slate-500">
-            Kuils River Technical High School • 09 October 2026 • 35 Tables
-          </div>
+      {/* FOOTER */}
+      <footer className="bg-white border-t border-purple-200 mt-12 py-8 text-center text-xs text-slate-500 font-medium space-y-3">
+        <div className="flex flex-wrap items-center justify-center gap-4 text-purple-900 font-bold">
+          <span>📅 Friday, 09 October 2026</span>
+          <span>📍 Kuils River Technical High School</span>
+          <span>🎟️ Raffle Draw: 21:00 - 21:30</span>
+          <span>👗 A Splash of Green</span>
+        </div>
+        <p className="max-w-xl mx-auto text-[11px] text-slate-600">
+          In aid of Sloan Jooste's post-op physiotherapy, rehabilitation, and Cerebral Palsy care. 
+          100% of proceeds directly fund medical treatment and recovery.
+        </p>
+        <div className="pt-2 flex items-center justify-center gap-4 text-[11px]">
+          <button onClick={() => setIsMyTicketsOpen(true)} className="text-emerald-700 font-bold hover:underline">My Tickets Pass</button>
+          <span>•</span>
+          <button onClick={() => setIsAdminLoginOpen(true)} className="text-purple-700 font-bold hover:underline">
+            {isAdmin ? 'Admin Console' : 'Admin Login'}
+          </button>
         </div>
       </footer>
 
-      {/* MODAL: FULL FLYER VIEWER */}
-      {selectedFlyerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-fadeIn">
-          <div className="relative max-w-xl w-full bg-white rounded-3xl overflow-hidden shadow-2xl border border-purple-200 flex flex-col">
-            <div className="px-5 py-3.5 bg-gradient-to-r from-emerald-700 to-purple-900 text-white flex items-center justify-between">
-              <span className="font-black text-sm">{selectedFlyerModal.title}</span>
-              <button 
-                onClick={() => setSelectedFlyerModal(null)}
-                className="p-1 rounded-full text-white/80 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-4 bg-slate-50 flex items-center justify-center max-h-[75vh] overflow-y-auto">
-              <img src={selectedFlyerModal.src} alt={selectedFlyerModal.title} className="max-h-[70vh] rounded-xl object-contain shadow-md" />
-            </div>
-            <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between gap-2">
-              <a 
-                href={selectedFlyerModal.src}
-                download
-                className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-1.5 shadow"
-              >
-                <Download className="w-4 h-4" /> Download Flyer
-              </a>
-              <button
-                onClick={shareViaWhatsAppGeneral}
-                className="py-2 px-4 rounded-xl bg-purple-800 hover:bg-purple-900 text-white font-black text-xs flex items-center gap-1.5 shadow"
-              >
-                <MessageCircle className="w-4 h-4" /> Share on WhatsApp
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* MODAL: BOOKING WIZARD */}
+      {isBookingOpen && (
+        <BookingWizard 
+          isOpen={isBookingOpen}
+          onClose={() => setIsBookingOpen(false)}
+          defaultOption={bookingDefaultOption}
+          onBookingComplete={(newBooking) => {
+            handleAddBooking(newBooking);
+            setActiveBookingTicket(newBooking);
+          }}
+        />
       )}
 
-      {/* BOOKING WIZARD MODAL */}
-      <BookingWizard 
-        isOpen={isBookingOpen}
-        defaultOption={bookingDefaultOption}
-        onClose={() => setIsBookingOpen(false)}
-        tablesData={tablesData}
-        onBookingSuccess={(newBooking) => {
-          setIsBookingOpen(false);
-          setActiveBookingTicket(newBooking);
-        }}
-      />
-
-      {/* DIGITAL TICKET MODAL */}
+      {/* MODAL: DIGITAL TICKET PASS */}
       {activeBookingTicket && (
-        <DigitalTicketModal
+        <DigitalTicketModal 
           booking={activeBookingTicket}
           onClose={() => setActiveBookingTicket(null)}
         />
       )}
 
-      {/* RAFFLE WHEEL MODAL */}
-      <RaffleWheelModal
-        isOpen={isRaffleWheelOpen}
-        onClose={() => setIsRaffleWheelOpen(false)}
-        bookings={bookings}
-      />
+      {/* MODAL: MY TICKETS LOOKUP */}
+      {isMyTicketsOpen && (
+        <MyTicketsModal 
+          isOpen={isMyTicketsOpen}
+          onClose={() => setIsMyTicketsOpen(false)}
+          bookings={bookings}
+          currentEmail={guestEmail}
+          onEmailChange={handleGuestEmailChange}
+          onOpenBooking={handleOpenBooking}
+          onSelectTicketPass={(b) => {
+            setIsMyTicketsOpen(false);
+            setActiveBookingTicket(b);
+          }}
+        />
+      )}
 
-      {/* GEMINI AI CONCIERGE ASSISTANT */}
-      <GeminiConcierge />
+      {/* MODAL: ADMIN LOGIN */}
+      {isAdminLoginOpen && (
+        <AdminLoginModal 
+          isOpen={isAdminLoginOpen}
+          onClose={() => setIsAdminLoginOpen(false)}
+          onLoginSuccess={handleAdminLoginSuccess}
+        />
+      )}
+
+      {/* MODAL: PROJECTOR RAFFLE WHEEL */}
+      {isRaffleWheelOpen && (
+        <RaffleWheelModal 
+          isOpen={isRaffleWheelOpen}
+          onClose={() => setIsRaffleWheelOpen(false)}
+          bookings={bookings}
+        />
+      )}
+
+      {/* MODAL: FLYER FULL-SIZE VIEWER */}
+      {selectedFlyerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-fadeIn" onClick={() => setSelectedFlyerModal(null)}>
+          <div className="relative max-w-lg w-full bg-white rounded-3xl overflow-hidden shadow-2xl border border-purple-200" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 bg-gradient-to-r from-emerald-700 to-purple-900 text-white flex items-center justify-between">
+              <h3 className="font-black text-sm">{selectedFlyerModal.title}</h3>
+              <button onClick={() => setSelectedFlyerModal(null)} className="p-1 rounded-full hover:bg-white/20">
+                ✕
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-slate-100 max-h-[75vh] overflow-y-auto">
+              <img src={selectedFlyerModal.src} alt={selectedFlyerModal.title} className="max-w-full h-auto rounded-2xl shadow-md" />
+            </div>
+            <div className="p-4 bg-white border-t border-purple-100 flex items-center justify-between">
+              <a 
+                href={selectedFlyerModal.src} 
+                download 
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center gap-1.5 transition shadow"
+              >
+                <Download className="w-4 h-4" /> Download High-Res Image
+              </a>
+              <button 
+                onClick={() => {
+                  const text = encodeURIComponent(`Check out the flyer for Sloan Jooste's Fundraiser Dance: ${window.location.origin}${selectedFlyerModal.src}`);
+                  window.open(`https://wa.me/?text=${text}`, '_blank');
+                }}
+                className="px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition"
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-700" /> Share on WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

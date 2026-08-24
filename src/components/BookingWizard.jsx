@@ -525,7 +525,8 @@ export default function BookingWizard({ isOpen, onClose, onBookingSuccess, table
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1 font-mono text-slate-800">
                   <p className="font-sans font-bold text-purple-900 mb-1">EFT Banking Details:</p>
                   <div>Bank: {EVENT_DETAILS.banking.bank}</div>
-                  <div>Account Name: {EVENT_DETAILS.banking.accountName}</div>
+                  <div>Account Holder: {EVENT_DETAILS.banking.accountHolder}</div>
+                  <div>Account Type: {EVENT_DETAILS.banking.accountType}</div>
                   <div>Account Number: {EVENT_DETAILS.banking.accountNumber}</div>
                   <div>Branch Code: {EVENT_DETAILS.banking.branchCode}</div>
                   <div className="text-emerald-800 font-bold font-sans pt-1">Reference: {firstName} {surname} (Table #{tableNumber})</div>

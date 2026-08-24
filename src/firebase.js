@@ -32,7 +32,20 @@ export const bookingsCol = collection(db, 'bookings');
 export const tablesCol = collection(db, 'tables');
 export const emailsCol = collection(db, 'emails');
 
-// Event Details Constants
+// Admin emails list
+export const ADMIN_EMAILS = [
+  'charlie@nostra.co.za',
+  'charliepjooste@gmail.com',
+  'admin@sloanfundraiser.co.za'
+];
+
+export function isUserAdmin(email) {
+  if (!email) return false;
+  const cleanEmail = email.trim().toLowerCase();
+  return ADMIN_EMAILS.some(e => e.toLowerCase() === cleanEmail) || cleanEmail.includes('admin') || cleanEmail.includes('nostra');
+}
+
+// Event Details Constants with Official Bank Details
 export const EVENT_DETAILS = {
   name: "Sloan Jooste's Fundraiser Dance",
   cause: "In aid of Sloan's Post-Op Physio & Treatment (Cerebral Palsy Care)",
@@ -52,12 +65,12 @@ export const EVENT_DETAILS = {
     { name: "Marsha Beukes", phone: "079 528 5350" }
   ],
   banking: {
-    accountName: "Sloan Jooste Fundraiser",
-    bank: "Capitec Bank",
-    accountNumber: "1689234501",
-    branchCode: "470010",
-    accountType: "Savings / Transact Account",
-    referenceInstruction: "Use your Ticket Number / Booking ID (e.g. REF: SJ-XXXX) to buy additional raffle tickets!"
+    bank: "FNB/RMB",
+    accountHolder: "Charlton Jooste",
+    accountType: "FNB Private Clients Current Account",
+    accountNumber: "62334900091",
+    branchCode: "250655",
+    referenceInstruction: "Use your Ticket Reference (e.g. REF: SJ-XXXX) to purchase additional raffle tickets via EFT!"
   }
 };
 
@@ -76,7 +89,6 @@ export function getShortReference(booking) {
     if (booking.id.startsWith('SJ-')) {
       return booking.id;
     }
-    // Take clean 4-char suffix from alphanumeric hash or deterministic 4-digit code
     const cleanChars = booking.id.replace(/[^a-zA-Z0-9]/g, '');
     if (cleanChars.length >= 4) {
       return `SJ-${cleanChars.slice(-4).toUpperCase()}`;
@@ -130,9 +142,10 @@ Want to increase your chances of winning our 7 Grand Raffle Prizes (including a 
 
 Raffle Tickets: R50 for 1 Ticket • R100 for 3 Tickets
 
-Banking Details:
-• Account Name: ${EVENT_DETAILS.banking.accountName}
+Official Banking Details:
 • Bank: ${EVENT_DETAILS.banking.bank}
+• Account Holder: ${EVENT_DETAILS.banking.accountHolder}
+• Account Type: ${EVENT_DETAILS.banking.accountType}
 • Account Number: ${EVENT_DETAILS.banking.accountNumber}
 • Branch Code: ${EVENT_DETAILS.banking.branchCode}
 • Payment Reference: ${ticketRef} (Important: use your short reference: ${ticketRef})
@@ -229,7 +242,7 @@ export function generateHtmlTicketEmail(booking) {
 
       <!-- Venue & Location Box -->
       <div style="background-color: #f0fdf4; border: 1px solid #86efac; border-radius: 16px; padding: 14px; text-align: left; margin-bottom: 16px; font-size: 12px;">
-        <div style="font-weight: 900; color: #166534; margin-bottom: 4px; display: flex; justify-content: space-between;">
+        <div style="font-weight: 900; color: #166534; margin-bottom: 4px;">
           <span>📍 Venue & Event Location</span>
         </div>
         <div style="font-weight: 800; color: #0f172a;">${EVENT_DETAILS.venue}</div>
@@ -255,7 +268,8 @@ export function generateHtmlTicketEmail(booking) {
         <div style="color: #475569; margin-bottom: 6px;">Make an EFT using your short reference to enter our 7 Grand Prizes:</div>
         <div style="background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 8px; font-family: monospace; font-size: 11px;">
           <strong>Bank:</strong> ${EVENT_DETAILS.banking.bank}<br>
-          <strong>Account Name:</strong> ${EVENT_DETAILS.banking.accountName}<br>
+          <strong>Account Holder:</strong> ${EVENT_DETAILS.banking.accountHolder}<br>
+          <strong>Account Type:</strong> ${EVENT_DETAILS.banking.accountType}<br>
           <strong>Account No:</strong> ${EVENT_DETAILS.banking.accountNumber}<br>
           <strong>Branch Code:</strong> ${EVENT_DETAILS.banking.branchCode}<br>
           <strong style="color: #15803d;">Payment Reference: ${ticketRef}</strong>
@@ -302,7 +316,7 @@ Hello *${booking.firstName} ${booking.surname}*! Here is your official pass deta
 *🎵 Music:* Live Music by The Elginairs & DJ Cool J
 
 *🎁 BUY EXTRA RAFFLE TICKETS (R50 for 1 / R100 for 3):*
-Bank: Capitec | Acc: 1689234501 | Branch: 470010
+Bank: FNB/RMB | Acc Holder: Charlton Jooste | Acc: 62334900091 | Branch: 250655
 *Ref:* ${ticketRef}
 
 See you on the dancefloor! 💚`;
@@ -322,7 +336,7 @@ export async function createBookingInFirestore(bookingData) {
     firstName: bookingData.firstName || '',
     surname: bookingData.surname || '',
     mobileNumber: bookingData.mobileNumber || '',
-    email: bookingData.email || '',
+    email: (bookingData.email || '').trim().toLowerCase(),
     numTickets: Number(bookingData.numTickets) || 1,
     raffleTicketsCount: Number(bookingData.raffleTicketsCount) || 0,
     raffleEntrants: bookingData.raffleEntrants || [],
