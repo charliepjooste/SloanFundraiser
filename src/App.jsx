@@ -46,9 +46,10 @@ import GeminiConcierge from './components/GeminiConcierge';
 import RaffleWheelModal from './components/RaffleWheelModal';
 import MyTicketsModal from './components/MyTicketsModal';
 import AdminLoginModal from './components/AdminLoginModal';
+import DonationsManagementTab from './components/DonationsManagementTab';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'seating', 'guests', 'checkin', 'wall'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'seating', 'guests', 'checkin', 'donations', 'wall'
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [bookingDefaultOption, setBookingDefaultOption] = useState('Standard Dance Ticket');
   const [isRaffleWheelOpen, setIsRaffleWheelOpen] = useState(false);
@@ -280,6 +281,12 @@ export default function App() {
                   Guest & Ticket Manager
                 </button>
                 <button
+                  onClick={() => setActiveTab('donations')}
+                  className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'donations' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
+                >
+                  💝 Donations
+                </button>
+                <button
                   onClick={() => setActiveTab('checkin')}
                   className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'checkin' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
                 >
@@ -375,6 +382,7 @@ export default function App() {
         {isAdmin && (
           <>
             <button onClick={() => setActiveTab('guests')} className={activeTab === 'guests' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Guests</button>
+            <button onClick={() => setActiveTab('donations')} className={activeTab === 'donations' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Donations</button>
             <button onClick={() => setActiveTab('checkin')} className={activeTab === 'checkin' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Check-In</button>
             <button onClick={() => setIsRaffleWheelOpen(true)} className="text-purple-900 font-black flex items-center gap-1">
               <Gift className="w-3.5 h-3.5 text-emerald-600" /> Wheel
@@ -398,34 +406,53 @@ export default function App() {
         
         {/* POST-BOOKING LANDING REDIRECT BANNER */}
         {bookingSuccessToast && (
-          <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-600 to-green-700 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
-            <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0">
+          <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-emerald-700 via-green-800 to-purple-950 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn border border-emerald-400/40">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0 mt-0.5">
                 <Check className="w-6 h-6 text-white stroke-[3]" />
               </div>
-              <div>
-                <h3 className="text-sm sm:text-base font-black">
-                  🎉 Booking Confirmed for {bookingSuccessToast.firstName} {bookingSuccessToast.surname}!
-                </h3>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm sm:text-base font-black">
+                    🎉 Booking Received for {bookingSuccessToast.firstName} {bookingSuccessToast.surname}!
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-400 text-amber-950 text-[10px] font-black uppercase">
+                    EFT Payment Required
+                  </span>
+                </div>
                 <p className="text-xs text-emerald-100 font-medium">
-                  Reference: <strong className="font-mono text-white bg-white/20 px-2 py-0.5 rounded">{getShortReference(bookingSuccessToast)}</strong> • Table #{bookingSuccessToast.tableNumber || 1} • {bookingSuccessToast.numTickets || 1} Seat(s)
+                  Reference: <strong className="font-mono text-white bg-white/20 px-2 py-0.5 rounded text-xs">{getShortReference(bookingSuccessToast)}</strong> • Amount Due: <strong className="text-white">R{bookingSuccessToast.amount}</strong> {bookingSuccessToast.tableNumber > 0 ? `• Table #${bookingSuccessToast.tableNumber}` : ''}
+                </p>
+                <p className="text-[11px] text-emerald-200">
+                  Please EFT <strong>R{bookingSuccessToast.amount}</strong> to FNB (Acc: <strong>62334900091</strong>, Branch: <strong>250655</strong>) using Reference: <strong>{bookingSuccessToast.firstName} {bookingSuccessToast.surname}</strong>. Tickets will be activated once funds clear.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-auto">
+            <div className="flex items-center gap-2 self-start sm:self-center flex-wrap shrink-0">
+              <button
+                onClick={() => {
+                  const phone = (bookingSuccessToast.mobileNumber || '').replace(/[^0-9]/g, '');
+                  const text = generateWhatsAppMessage(bookingSuccessToast);
+                  window.open(`https://wa.me/?text=${text}`, '_blank');
+                }}
+                className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition shadow flex items-center gap-1.5"
+              >
+                <MessageCircle className="w-3.5 h-3.5" /> WhatsApp Proof
+              </button>
               <button
                 onClick={() => {
                   setBookingSuccessToast(null);
                   setIsMyTicketsOpen(true);
                 }}
-                className="px-4 py-2 rounded-xl bg-white text-emerald-900 font-black text-xs hover:bg-emerald-50 transition shadow"
+                className="px-4 py-2 rounded-xl bg-white text-emerald-950 font-black text-xs hover:bg-emerald-50 transition shadow"
               >
                 View in My Tickets
               </button>
               <button
                 onClick={() => setBookingSuccessToast(null)}
                 className="p-2 rounded-xl hover:bg-white/20 text-white"
+                title="Dismiss"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -706,7 +733,7 @@ export default function App() {
                       <span className="font-black text-emerald-800 text-xs flex items-center gap-1">
                         🏆 GRAND PRIZE (Drawn Last)
                       </span>
-                      <p className="font-black text-slate-900 text-base">Whole Prepared Lamb</p>
+                      <p className="font-black text-slate-900 text-base">Whole Lamb</p>
                       <p className="text-xs text-slate-600 font-medium">Grand prize for our lucky raffle supporter</p>
                     </div>
                     <span className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-black text-sm">R2,000</span>
@@ -818,7 +845,17 @@ export default function App() {
           />
         )}
 
-        {/* TAB 4: DOOR CHECK-IN DESK (Admin Only) */}
+        {/* TAB 4: DONATIONS MANAGER (Admin Only) */}
+        {activeTab === 'donations' && isAdmin && (
+          <DonationsManagementTab 
+            bookings={bookings}
+            onUpdateBooking={handleUpdateBooking}
+            onAddBooking={handleAddBooking}
+            onDeleteBooking={handleDeleteBooking}
+          />
+        )}
+
+        {/* TAB 5: DOOR CHECK-IN DESK (Admin Only) */}
         {activeTab === 'checkin' && isAdmin && (
           <CheckInPortal 
             bookings={bookings} 
