@@ -163,6 +163,7 @@ export default function App() {
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 3000);
   };
+  const handleCopyLink = handleShareApp;
 
   const handleOpenBooking = (option = 'Standard Dance Ticket') => {
     setBookingDefaultOption(option);
@@ -381,7 +382,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={handleCopyLink}
+              onClick={handleShareApp}
               className="p-2 rounded-xl bg-slate-100 border border-purple-200 text-purple-900 hover:bg-slate-200 transition"
               title="Copy event link"
             >
