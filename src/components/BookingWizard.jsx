@@ -183,26 +183,28 @@ export default function BookingWizard({
   };
 
   const handleSubmitBooking = async (e) => {
-    if (e) e.preventDefault();
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      let finalSpecialRequests = specialRequests;
+      let finalSpecialRequests = specialRequests || '';
       if (generateAiTribute) {
         try {
-          const aiMessage = await generateTributeMessage(`${firstName} ${surname}`, calculatedAmount);
-          finalSpecialRequests = specialRequests 
-            ? `${specialRequests} | Tribute: "${aiMessage}"` 
-            : `Tribute: "${aiMessage}"`;
+          const aiMessage = await generateTributeMessage(`${firstName || ''} ${surname || ''}`, calculatedAmount);
+          if (aiMessage) {
+            finalSpecialRequests = finalSpecialRequests 
+              ? `${finalSpecialRequests} | Tribute: "${aiMessage}"` 
+              : `Tribute: "${aiMessage}"`;
+          }
         } catch (e) {
           console.warn("AI tribute generation fallback:", e);
         }
       }
 
-      const finalRaffleEntrants = raffleEntrants.map((ent, idx) => ({
-        name: ent.name && ent.name.trim() ? ent.name.trim() : `${firstName} ${surname}${idx > 0 ? ` (Entry ${idx + 1})` : ''}`,
-        tableNumber: Number(ent.tableNumber) || Number(tableNumber) || 1
+      const finalRaffleEntrants = (raffleEntrants || []).map((ent, idx) => ({
+        name: ent?.name && ent.name.trim() ? ent.name.trim() : `${firstName || ''} ${surname || ''}${idx > 0 ? ` (Entry ${idx + 1})` : ''}`,
+        tableNumber: Number(ent?.tableNumber) || Number(tableNumber) || 1
       }));
 
       // Auto-assign table if individual ticket
@@ -214,28 +216,31 @@ export default function BookingWizard({
       }
 
       const bookingPayload = {
-        firstName: firstName.trim(),
-        surname: surname.trim(),
-        mobileNumber: mobileNumber.trim(),
-        email: email.trim().toLowerCase(),
-        numTickets: tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : tableBookingOption === 'Raffle Tickets Only' ? 0 : Number(numTickets),
-        raffleTicketsCount: rafflePackOption,
+        firstName: (firstName || '').trim(),
+        surname: (surname || '').trim(),
+        mobileNumber: (mobileNumber || '').trim(),
+        email: (email || '').trim().toLowerCase(),
+        numTickets: tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : tableBookingOption === 'Raffle Tickets Only' ? 0 : Number(numTickets) || 1,
+        raffleTicketsCount: Number(rafflePackOption) || 0,
         raffleEntrants: finalRaffleEntrants,
         donationAmount: Number(donationAmount) || 0,
-        tableBookingOption,
+        tableBookingOption: tableBookingOption || 'Standard Dance Ticket',
         tableNumber: finalTableNumber,
         specialRequests: finalSpecialRequests,
         consentTerms: Boolean(consentTerms),
         paymentStatus: 'pending_eft',
         paymentMethod: 'eft',
-        amount: calculatedAmount
+        amount: Number(calculatedAmount) || 0
       };
 
       const newBooking = await createBookingInFirestore(bookingPayload);
       setLoading(false);
 
-      const callback = onBookingComplete || onBookingSuccess;
-      if (callback) callback(newBooking);
+      if (onBookingComplete) {
+        onBookingComplete(newBooking);
+      } else if (onBookingSuccess) {
+        onBookingSuccess(newBooking);
+      }
 
       // Close modal smoothly to redirect back to landing page
       onClose();
@@ -245,22 +250,23 @@ export default function BookingWizard({
       const fallbackBooking = {
         id: `local_${Date.now()}`,
         ticketRef: shortRef,
-        firstName: firstName.trim(),
-        surname: surname.trim(),
-        mobileNumber: mobileNumber.trim(),
-        email: email.trim().toLowerCase(),
-        numTickets: tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : tableBookingOption === 'Raffle Tickets Only' ? 0 : Number(numTickets),
-        raffleTicketsCount: rafflePackOption,
+        firstName: (firstName || '').trim(),
+        surname: (surname || '').trim(),
+        mobileNumber: (mobileNumber || '').trim(),
+        email: (email || '').trim().toLowerCase(),
+        numTickets: tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : tableBookingOption === 'Raffle Tickets Only' ? 0 : Number(numTickets) || 1,
+        raffleTicketsCount: Number(rafflePackOption) || 0,
         donationAmount: Number(donationAmount) || 0,
-        tableBookingOption,
+        tableBookingOption: tableBookingOption || 'Standard Dance Ticket',
         tableNumber: Number(tableNumber) || 1,
-        amount: calculatedAmount,
+        amount: Number(calculatedAmount) || 0,
         paymentStatus: 'pending_eft',
-        paymentMethod: 'eft'
+        paymentMethod: 'eft',
+        createdAt: new Date().toISOString()
       };
       setLoading(false);
-      const callback = onBookingComplete || onBookingSuccess;
-      if (callback) callback(fallbackBooking);
+      if (onBookingComplete) onBookingComplete(fallbackBooking);
+      else if (onBookingSuccess) onBookingSuccess(fallbackBooking);
       onClose();
     }
   };

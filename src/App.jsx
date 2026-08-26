@@ -173,10 +173,16 @@ export default function App() {
   };
 
   const handleAddBooking = (newBooking) => {
-    setBookings(prev => [newBooking, ...prev]);
+    if (!newBooking) return;
+    setBookings(prev => {
+      const list = Array.isArray(prev) ? prev : [];
+      return [newBooking, ...list.filter(b => b && b.id !== newBooking.id)];
+    });
     if (newBooking.email) {
       handleGuestEmailChange(newBooking.email);
     }
+    setActiveTab('overview');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Reset / Clear All Bookings to ZERO
@@ -991,7 +997,7 @@ export default function App() {
 
                     <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100">
                       <span>{b.numTickets || 1} Seat(s) Reserved</span>
-                      <span>{new Date(b.createdAt || Date.now()).toLocaleDateString()}</span>
+                      <span>{b.createdAt ? (typeof b.createdAt === 'string' ? b.createdAt.slice(0, 10) : '2026-10-09') : '2026-10-09'}</span>
                     </div>
                   </div>
                 ))}

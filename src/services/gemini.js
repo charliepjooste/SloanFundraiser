@@ -41,8 +41,8 @@ Event Details:
   5. 5th Draw: Chivas Regal 13YO American Rye Cask Scotch Whisky 1L (Value: R2,000)
   6. 6th Draw: Photoshoot for a Couple (Value: R2,500)
   7. 7th Draw (GRAND FINALE): Whole Lamb (Value: R2,000) — Drawn Last!
-- Banking Details for Raffle Tickets: Capitec Bank | Acc: 1689234501 | Branch: 470010 | Ref: [Ticket Number / Booking ID]
-- Contacts: Nicole Jooste (071 113 4812) / Marsha Beukes (079 528 5350)
+- Banking Details for Raffle Tickets: FNB/RMB | Acc Holder: Charlton Jooste | Acc: 62334900091 | Branch: 250655 | Ref: [Ticket Number / Booking ID]
+- Contacts: Nicole Jooste (071 113 4812) / Charlie Jooste (079 528 5350)
 
 Guest Question: ${userPrompt}`
       });
@@ -72,8 +72,8 @@ Guest Question: ${userPrompt}`
   if (promptLower.includes('time') || promptLower.includes('when') || promptLower.includes('date')) {
     return "📅 **Date & Time**: Friday, 09 October 2026 from **19:00 to 00:00 (Midnight)**. The **Raffle Draw** is held from **21:00 to 21:30**.";
   }
-  if (promptLower.includes('contact') || promptLower.includes('nicole') || promptLower.includes('marsha') || promptLower.includes('phone')) {
-    return "📞 **Event Contacts**:\n• Nicole Jooste: 071 113 4812\n• Marsha Beukes: 079 528 5350";
+  if (promptLower.includes('contact') || promptLower.includes('nicole') || promptLower.includes('charlie') || promptLower.includes('phone')) {
+    return "📞 **Event Contacts**:\n• Nicole Jooste: 071 113 4812\n• Charlie Jooste: 079 528 5350";
   }
   if (promptLower.includes('table') || promptLower.includes('ticket') || promptLower.includes('price')) {
     return "🎟️ **Tickets & Tables**: Standard Dance Tickets are R150 per person. Full Private Tables of 10 are R1,500 (35 Tables total). Raffle tickets are R50 for 1 or R100 for 3.";
@@ -86,21 +86,28 @@ Guest Question: ${userPrompt}`
  * Generate a personalized tribute message
  */
 export async function generateTributeMessage(donorName, amount) {
-  if (aiClient) {
-    try {
-      const response = await aiClient.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Write a short, heartwarming 2-sentence note of encouragement for Sloan Jooste from guest ${donorName} who reserved dance tickets / contributed R${amount} for his post-op physio and Cerebral Palsy care.`
-      });
-      return response.text;
-    } catch (e) {}
-  }
-
-  const messages = [
+  const fallbackMessages = [
     `Dear Sloan, sending you strength, love, and endless smiles! Excited to dance for your journey. — ${donorName}`,
     `With love and hope for your post-op healing and bright future, Sloan! Cheering you on every step. — ${donorName}`,
     `Sloan, your courage inspires everyone around you. Honored to celebrate and support your care! — ${donorName}`
   ];
+  const fallback = fallbackMessages[Math.floor(Math.random() * fallbackMessages.length)];
 
-  return messages[Math.floor(Math.random() * messages.length)];
+  if (aiClient) {
+    try {
+      const call = aiClient.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Write a short, heartwarming 2-sentence note of encouragement for Sloan Jooste from guest ${donorName} who reserved dance tickets / contributed R${amount} for his post-op physio and Cerebral Palsy care.`
+      });
+      const res = await Promise.race([
+        call,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 800))
+      ]);
+      return res?.text || fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  return fallback;
 }

@@ -52,9 +52,9 @@ export default function SeatingArrangementTab({
 
     const term = searchTerm.toLowerCase();
     const tableMatch = `table ${t.tableNumber}`.includes(term);
-    const guestMatch = t.bookings.some(b => 
-      `${b.firstName} ${b.surname}`.toLowerCase().includes(term) ||
-      (b.guestNames && b.guestNames.some(name => name.toLowerCase().includes(term)))
+    const guestMatch = (t.bookings || []).some(b => 
+      `${b?.firstName || ''} ${b?.surname || ''}`.toLowerCase().includes(term) ||
+      (b?.guestNames && Array.isArray(b.guestNames) && b.guestNames.some(name => typeof name === 'string' && name.toLowerCase().includes(term)))
     );
     return tableMatch || guestMatch;
   });

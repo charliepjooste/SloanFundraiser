@@ -66,8 +66,8 @@ export default function RaffleWheelModal({ isOpen, onClose, bookings = [] }) {
     }
 
     // Eliminate all tickets belonging to any already won participant
-    const winnerNames = new Set(wonPrizes.map(wp => wp.winner.name.trim().toLowerCase()));
-    const remainingTickets = list.filter(p => !winnerNames.has(p.name.trim().toLowerCase()));
+    const winnerNames = new Set((wonPrizes || []).map(wp => (wp?.winner?.name || '').trim().toLowerCase()).filter(Boolean));
+    const remainingTickets = list.filter(p => !winnerNames.has((p?.name || '').trim().toLowerCase()));
 
     setParticipants(remainingTickets);
   }, [bookings, isOpen, wonPrizes]);
