@@ -404,57 +404,130 @@ export default function App() {
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8">
         
-        {/* POST-BOOKING LANDING REDIRECT BANNER */}
+        {/* POST-BOOKING LANDING REDIRECT BANNER & EFT CONFIRMATION BOARD */}
         {bookingSuccessToast && (
-          <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-emerald-700 via-green-800 to-purple-950 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn border border-emerald-400/40">
-            <div className="flex items-start gap-3.5">
-              <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0 mt-0.5">
-                <Check className="w-6 h-6 text-white stroke-[3]" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-sm sm:text-base font-black">
-                    🎉 Booking Received for {bookingSuccessToast.firstName} {bookingSuccessToast.surname}!
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-md bg-amber-400 text-amber-950 text-[10px] font-black uppercase">
-                    EFT Payment Required
-                  </span>
+          <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-purple-950 via-emerald-950 to-slate-950 text-white shadow-2xl space-y-5 animate-fadeIn border-2 border-emerald-400/50 relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0">
+                  <Check className="w-7 h-7 text-emerald-400 stroke-[3]" />
                 </div>
-                <p className="text-xs text-emerald-100 font-medium">
-                  Reference: <strong className="font-mono text-white bg-white/20 px-2 py-0.5 rounded text-xs">{getShortReference(bookingSuccessToast)}</strong> • Amount Due: <strong className="text-white">R{bookingSuccessToast.amount}</strong> {bookingSuccessToast.tableNumber > 0 ? `• Table #${bookingSuccessToast.tableNumber}` : ''}
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 text-[10px] font-black uppercase tracking-wider">
+                      EFT Booking Received
+                    </span>
+                    <span className="text-xs text-purple-200 font-mono font-bold">
+                      Ref: {getShortReference(bookingSuccessToast)}
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-black text-white mt-0.5">
+                    Thank You, {bookingSuccessToast.firstName} {bookingSuccessToast.surname}!
+                  </h3>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setBookingSuccessToast(null)}
+                className="p-1.5 rounded-full hover:bg-white/20 text-white/60 hover:text-white transition self-end md:self-center"
+                title="Dismiss"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Notification Explanations */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                <div className="flex items-center gap-2 text-emerald-300 font-black">
+                  <Mail className="w-4 h-4" />
+                  <span>Confirmation Dispatched to Email</span>
+                </div>
+                <p className="text-slate-200 leading-relaxed">
+                  A booking confirmation notice has been sent to <strong className="text-white font-mono bg-white/10 px-1.5 py-0.5 rounded">{bookingSuccessToast.email}</strong>.
                 </p>
-                <p className="text-[11px] text-emerald-200">
-                  Please EFT <strong>R{bookingSuccessToast.amount}</strong> to FNB (Acc: <strong>62334900091</strong>, Branch: <strong>250655</strong>) using Reference: <strong>{bookingSuccessToast.firstName} {bookingSuccessToast.surname}</strong>. Tickets will be activated once funds clear.
+                <p className="text-slate-300 text-[11px]">
+                  *Note: Your official digital QR passes will be generated & sent once your EFT payment is verified.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                <div className="flex items-center gap-2 text-purple-300 font-black">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Verification & Digital Pass Delivery</span>
+                </div>
+                <p className="text-slate-200 leading-relaxed">
+                  Once organizers <strong>Charlie or Nicole</strong> verify your transfer in the bank, your digital passes will be automatically unlocked and sent via <strong>Email & WhatsApp</strong>.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-start sm:self-center flex-wrap shrink-0">
-              <button
-                onClick={() => {
-                  const phone = (bookingSuccessToast.mobileNumber || '').replace(/[^0-9]/g, '');
-                  const text = generateWhatsAppMessage(bookingSuccessToast);
-                  window.open(`https://wa.me/?text=${text}`, '_blank');
-                }}
-                className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition shadow flex items-center gap-1.5"
-              >
-                <MessageCircle className="w-3.5 h-3.5" /> WhatsApp Proof
-              </button>
+            {/* Bank Payment Details Box */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-white text-slate-900 shadow-md space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-purple-950 flex items-center gap-1.5">
+                  <CreditCard className="w-4 h-4 text-emerald-600" />
+                  FNB Bank Details for EFT Payment:
+                </span>
+                <span className="text-xs font-black text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                  Amount Due: R{bookingSuccessToast.amount}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Bank</span>
+                  <span className="font-bold text-slate-900">{EVENT_DETAILS.banking.bank}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Account Holder</span>
+                  <span className="font-bold text-slate-900">{EVENT_DETAILS.banking.accountHolder}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Account Number</span>
+                  <span className="font-black text-purple-950">{EVENT_DETAILS.banking.accountNumber}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                  <span className="text-[10px] font-sans font-bold text-emerald-900 block">Payment Reference</span>
+                  <span className="font-black text-emerald-950">{getShortReference(bookingSuccessToast)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Action Buttons */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    const phone = (bookingSuccessToast.mobileNumber || '').replace(/[^0-9]/g, '');
+                    const text = generateWhatsAppMessage(bookingSuccessToast);
+                    window.open(`https://wa.me/?text=${text}`, '_blank');
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition shadow flex items-center gap-1.5"
+                >
+                  <MessageCircle className="w-4 h-4" /> Send Proof on WhatsApp
+                </button>
+
+                <button
+                  onClick={() => {
+                    const subject = encodeURIComponent(`🎟️ EFT Payment Proof - ${bookingSuccessToast.firstName} ${bookingSuccessToast.surname} (${getShortReference(bookingSuccessToast)})`);
+                    const body = encodeURIComponent(`Dear Charlie and Nicole,\n\nPlease find attached the proof of EFT payment for my booking (${getShortReference(bookingSuccessToast)}) for Sloan Jooste's Fundraiser Dance.\n\nAmount: R${bookingSuccessToast.amount}\nGuest: ${bookingSuccessToast.firstName} ${bookingSuccessToast.surname}\n\nThank you!`);
+                    window.open(`mailto:charliepjooste@gmail.com,nicolejooste8@gmail.com?subject=${subject}&body=${body}`, '_blank');
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition shadow flex items-center gap-1.5"
+                >
+                  <Mail className="w-4 h-4" /> Email Proof of Payment
+                </button>
+              </div>
+
               <button
                 onClick={() => {
                   setBookingSuccessToast(null);
                   setIsMyTicketsOpen(true);
                 }}
-                className="px-4 py-2 rounded-xl bg-white text-emerald-950 font-black text-xs hover:bg-emerald-50 transition shadow"
+                className="px-4 py-2.5 rounded-xl bg-white text-slate-900 font-black text-xs hover:bg-slate-100 transition shadow flex items-center gap-1.5"
               >
-                View in My Tickets
-              </button>
-              <button
-                onClick={() => setBookingSuccessToast(null)}
-                className="p-2 rounded-xl hover:bg-white/20 text-white"
-                title="Dismiss"
-              >
-                <X className="w-4 h-4" />
+                <Ticket className="w-4 h-4 text-emerald-600" /> View in My Tickets
               </button>
             </div>
           </div>

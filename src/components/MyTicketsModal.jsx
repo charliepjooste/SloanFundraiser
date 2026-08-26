@@ -45,6 +45,15 @@ export default function MyTicketsModal({
   const [downloadingId, setDownloadingId] = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
 
+  // Auto-load email from prop or localStorage on modal open
+  useEffect(() => {
+    const emailToUse = (currentEmail || localStorage.getItem('sloan_guest_email') || '').trim().toLowerCase();
+    if (emailToUse) {
+      setInputEmail(emailToUse);
+      setActiveEmail(emailToUse);
+    }
+  }, [isOpen, currentEmail]);
+
   // Attendee Editing state
   const [editingBooking, setEditingBooking] = useState(null);
   const [editingNames, setEditingNames] = useState([]);

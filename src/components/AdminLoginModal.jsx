@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, ShieldCheck, Mail, Lock, KeyRound, AlertCircle, UserCheck } from 'lucide-react';
-import { isUserAdmin } from '../firebase';
+import { isUserAdmin, verifyAdminPin, ADMIN_ACCOUNTS } from '../firebase';
 
 export default function AdminLoginModal({ 
   isOpen, 
@@ -16,15 +16,33 @@ export default function AdminLoginModal({
   const handleAdminLogin = (e) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
-    
-    // Check if email matches authorized admin or passcode is correct
-    if (isUserAdmin(cleanEmail) || passcode === 'sloan2026' || passcode === '1234') {
+    const cleanPin = passcode.trim();
+
+    if (!cleanEmail) {
+      setErrorMsg('Please enter your admin email address.');
+      return;
+    }
+
+    if (!isUserAdmin(cleanEmail)) {
+      setErrorMsg('Unauthorized admin email. Access is restricted to authorized event organizers.');
+      return;
+    }
+
+    if (!cleanPin) {
+      setErrorMsg('Please enter your Admin PIN to log in.');
+      return;
+    }
+
+    // Verify respective Admin PIN (Charlie = Coolcat, Nicole = Coolcat1)
+    if (verifyAdminPin(cleanEmail, cleanPin)) {
       localStorage.setItem('sloan_admin_authenticated', 'true');
       localStorage.setItem('sloan_admin_email', cleanEmail);
       if (onLoginSuccess) onLoginSuccess(cleanEmail);
+      setErrorMsg('');
+      setPasscode('');
       onClose();
     } else {
-      setErrorMsg('Invalid admin email. Please use an authorized organizer email or passcode.');
+      setErrorMsg(`Incorrect PIN for ${cleanEmail}. Please enter the correct admin PIN.`);
     }
   };
 
@@ -40,7 +58,7 @@ export default function AdminLoginModal({
             </div>
             <div>
               <h2 className="text-base font-black tracking-wide">Admin Portal Login</h2>
-              <span className="text-[11px] text-purple-200 font-medium">Organizer & Seating Management Access</span>
+              <span className="text-[11px] text-purple-200 font-medium">Organizer PIN Authentication Required</span>
             </div>
           </div>
           <button 
@@ -63,12 +81,15 @@ export default function AdminLoginModal({
 
           {/* Quick Select Buttons */}
           <div className="space-y-1.5">
-            <label className="block font-bold text-slate-700">Quick Organizer Login:</label>
+            <label className="block font-bold text-slate-700">Select Organizer Account:</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setEmail('charliepjooste@gmail.com')}
-                className={`p-2 rounded-xl border text-[11px] font-bold text-left transition ${email === 'charliepjooste@gmail.com' ? 'border-purple-600 bg-purple-50 text-purple-950' : 'border-slate-200 bg-slate-50 text-slate-600'}`}
+                onClick={() => {
+                  setEmail('charliepjooste@gmail.com');
+                  setErrorMsg('');
+                }}
+                className={`p-2.5 rounded-xl border text-[11px] font-bold text-left transition ${email === 'charliepjooste@gmail.com' ? 'border-2 border-purple-600 bg-purple-50 text-purple-950 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-purple-50'}`}
               >
                 Charlie Jooste
                 <span className="block text-[9px] text-slate-400 font-mono truncate">charliepjooste@gmail.com</span>
@@ -76,8 +97,11 @@ export default function AdminLoginModal({
 
               <button
                 type="button"
-                onClick={() => setEmail('nicolejooste8@gmail.com')}
-                className={`p-2 rounded-xl border text-[11px] font-bold text-left transition ${email === 'nicolejooste8@gmail.com' ? 'border-purple-600 bg-purple-50 text-purple-950' : 'border-slate-200 bg-slate-50 text-slate-600'}`}
+                onClick={() => {
+                  setEmail('nicolejooste8@gmail.com');
+                  setErrorMsg('');
+                }}
+                className={`p-2.5 rounded-xl border text-[11px] font-bold text-left transition ${email === 'nicolejooste8@gmail.com' ? 'border-2 border-purple-600 bg-purple-50 text-purple-950 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-purple-50'}`}
               >
                 Nicole Jooste
                 <span className="block text-[9px] text-slate-400 font-mono truncate">nicolejooste8@gmail.com</span>
@@ -92,8 +116,11 @@ export default function AdminLoginModal({
               <input 
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. nicolejooste8@gmail.com"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setErrorMsg('');
+                }}
+                placeholder="e.g. charliepjooste@gmail.com"
                 required
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-purple-200 rounded-xl text-slate-900 font-semibold focus:outline-none focus:border-purple-600 text-xs"
               />
@@ -101,14 +128,18 @@ export default function AdminLoginModal({
           </div>
 
           <div>
-            <label className="block font-black text-slate-900 mb-1.5">Passcode / PIN (Optional for verified admin email)</label>
+            <label className="block font-black text-slate-900 mb-1.5">Enter Admin PIN *</label>
             <div className="relative">
               <KeyRound className="w-4 h-4 text-purple-700 absolute left-3.5 top-3" />
               <input 
                 type="password"
                 value={passcode}
-                onChange={(e) => setPasscode(e.target.value)}
-                placeholder="Enter admin PIN (e.g. sloan2026)"
+                onChange={(e) => {
+                  setPasscode(e.target.value);
+                  setErrorMsg('');
+                }}
+                placeholder="Enter your organizer PIN"
+                required
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-purple-200 rounded-xl text-slate-900 font-semibold focus:outline-none focus:border-purple-600 text-xs"
               />
             </div>
@@ -119,12 +150,12 @@ export default function AdminLoginModal({
               type="submit"
               className="w-full py-3 px-4 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-black text-xs shadow-lg transition flex items-center justify-center gap-2"
             >
-              <ShieldCheck className="w-4 h-4" /> Sign In as Admin
+              <ShieldCheck className="w-4 h-4" /> Sign In to Admin Console
             </button>
           </div>
 
           <p className="text-[11px] text-center text-slate-500 font-medium">
-            Authorized Organizers: Nicole Jooste • Charlton (Charlie) Jooste • Marsha Beukes
+            Authorized Organizers: Nicole Jooste • Charlie Jooste
           </p>
         </form>
 

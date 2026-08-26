@@ -32,18 +32,30 @@ export const bookingsCol = collection(db, 'bookings');
 export const tablesCol = collection(db, 'tables');
 export const emailsCol = collection(db, 'emails');
 
-// Admin emails list (Charlie & Nicole)
-export const ADMIN_EMAILS = [
-  'charlie@nostra.co.za',
-  'charliepjooste@gmail.com',
-  'nicolejooste8@gmail.com',
-  'admin@sloanfundraiser.co.za'
-];
+// Admin accounts authorized to manage the platform with PINs
+export const ADMIN_ACCOUNTS = {
+  'charliepjooste@gmail.com': { name: 'Charlton (Charlie) Jooste', pin: 'Coolcat', phone: '079 528 5350' },
+  'nicolejooste8@gmail.com': { name: 'Nicole Jooste', pin: 'Coolcat1', phone: '071 113 4812' },
+  'charlie@nostra.co.za': { name: 'Charlton (Charlie) Jooste', pin: 'Coolcat', phone: '079 528 5350' }
+};
+
+export const ADMIN_EMAILS = Object.keys(ADMIN_ACCOUNTS);
 
 export function isUserAdmin(email) {
   if (!email) return false;
+  return Boolean(ADMIN_ACCOUNTS[email.trim().toLowerCase()]);
+}
+
+export function verifyAdminPin(email, pin) {
+  if (!email || !pin) return false;
   const cleanEmail = email.trim().toLowerCase();
-  return ADMIN_EMAILS.some(e => e.toLowerCase() === cleanEmail) || cleanEmail.includes('admin') || cleanEmail.includes('nostra');
+  const cleanPin = pin.trim();
+  
+  const admin = ADMIN_ACCOUNTS[cleanEmail];
+  if (!admin) return false;
+  
+  // Allow exact match or case-insensitive match
+  return admin.pin === cleanPin || admin.pin.toLowerCase() === cleanPin.toLowerCase();
 }
 
 // Event Details Constants with Official Bank Details
@@ -482,6 +494,16 @@ export async function createBookingInFirestore(bookingData) {
     }
   }
 
+  // Immediately update local persistent cache so tickets pull through instantly
+  try {
+    const cached = localStorage.getItem('sloan_cached_bookings');
+    let list = cached ? JSON.parse(cached) : [];
+    if (!Array.isArray(list)) list = [];
+    list = [fullBooking, ...list.filter(b => b.id !== fullBooking.id)];
+    localStorage.setItem('sloan_cached_bookings', JSON.stringify(list));
+    localStorage.setItem('sloan_guest_email', fullBooking.email);
+  } catch (e) {}
+
   return fullBooking;
 }
 
@@ -509,6 +531,16 @@ export async function approveEftPayment(booking) {
         });
       }
     }
+
+    // Update local cache
+    try {
+      const cached = localStorage.getItem('sloan_cached_bookings');
+      if (cached) {
+        const list = JSON.parse(cached);
+        const updated = list.map(b => b.id === booking.id ? { ...b, paymentStatus: 'paid' } : b);
+        localStorage.setItem('sloan_cached_bookings', JSON.stringify(updated));
+      }
+    } catch (e) {}
 
     // Resend confirmation pass
     await resendTicketEmail({ ...booking, paymentStatus: 'paid' });
@@ -596,6 +628,16 @@ export async function updateGuestRecord(bookingId, updatedFields) {
   try {
     const bookingRef = doc(db, 'bookings', bookingId);
     await updateDoc(bookingRef, updatedFields);
+
+    // Update local cache
+    try {
+      const cached = localStorage.getItem('sloan_cached_bookings');
+      if (cached) {
+        const list = JSON.parse(cached);
+        const updated = list.map(b => b.id === bookingId ? { ...b, ...updatedFields } : b);
+        localStorage.setItem('sloan_cached_bookings', JSON.stringify(updated));
+      }
+    } catch (e) {}
   } catch (err) {
     console.error("Error updating guest record:", err);
   }
@@ -608,6 +650,16 @@ export async function deleteGuestRecord(bookingId) {
   try {
     const bookingRef = doc(db, 'bookings', bookingId);
     await deleteDoc(bookingRef);
+
+    // Update local cache
+    try {
+      const cached = localStorage.getItem('sloan_cached_bookings');
+      if (cached) {
+        const list = JSON.parse(cached);
+        const updated = list.filter(b => b.id !== bookingId);
+        localStorage.setItem('sloan_cached_bookings', JSON.stringify(updated));
+      }
+    } catch (e) {}
   } catch (err) {
     console.error("Error deleting guest record:", err);
   }
@@ -631,15 +683,53 @@ export async function updateBookingGuestNames(bookingId, guestNamesList) {
  * Real-time subscription to Bookings
  */
 export function subscribeBookings(callback) {
+  // Initial immediate emit from local cache if present
+  try {
+    const cached = localStorage.getItem('sloan_cached_bookings');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        callback(parsed);
+      }
+    }
+  } catch (e) {}
+
   return onSnapshot(bookingsCol, (snapshot) => {
-    const bookingsList = snapshot.docs.map(docSnap => ({
+    const firestoreBookings = snapshot.docs.map(docSnap => ({
       id: docSnap.id,
       ...docSnap.data()
     }));
-    callback(bookingsList);
+
+    // Merge with any local offline bookings
+    let finalBookings = [...firestoreBookings];
+    try {
+      const cached = localStorage.getItem('sloan_cached_bookings');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          const firestoreIds = new Set(firestoreBookings.map(b => b.id));
+          const localOnly = parsed.filter(b => !firestoreIds.has(b.id) && b.id.startsWith('local_'));
+          finalBookings = [...localOnly, ...firestoreBookings];
+        }
+      }
+    } catch (e) {}
+
+    try {
+      localStorage.setItem('sloan_cached_bookings', JSON.stringify(finalBookings));
+    } catch (e) {}
+
+    callback(finalBookings);
   }, (error) => {
-    console.error("Firestore Bookings subscribe error:", error);
-    callback(null);
+    console.warn("Firestore Bookings subscribe error (falling back to cache):", error);
+    try {
+      const cached = localStorage.getItem('sloan_cached_bookings');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        callback(parsed);
+        return;
+      }
+    } catch (e) {}
+    callback([]);
   });
 }
 
