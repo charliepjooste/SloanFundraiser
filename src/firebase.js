@@ -75,7 +75,7 @@ export const EVENT_DETAILS = {
   seatsPerTable: 10,
   contacts: [
     { name: "Nicole Jooste", phone: "071 113 4812", email: "nicolejooste8@gmail.com" },
-    { name: "Charlton (Charlie) Jooste", phone: "079 528 5350", email: "charliepjooste@gmail.com" }
+    { name: "Marsha Beukes", phone: "079 528 5350" }
   ],
   banking: {
     bank: "FNB/RMB",
@@ -214,7 +214,7 @@ Please make an EFT transfer to:
 📞 ORGANIZING COMMITTEE CONTACTS
 ==================================================
 • Nicole Jooste: 071 113 4812 (nicolejooste8@gmail.com)
-• Charlie Jooste: 079 528 5350 (charliepjooste@gmail.com)
+• Marsha Beukes: 079 528 5350
 
 Thank you for your love, generosity, and support for Sloan! 💚`;
 }
@@ -352,7 +352,7 @@ export function generateHtmlTicketEmail(booking) {
 
     <!-- Footer -->
     <div style="background-color: #f8fafc; padding: 14px 24px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #64748b;">
-      Nicole Jooste: 071 113 4812 • Charlie Jooste: 079 528 5350<br>
+      Nicole Jooste: 071 113 4812 • Marsha Beukes: 079 528 5350<br>
       <strong>Thank you for supporting Sloan! 💚</strong>
     </div>
 

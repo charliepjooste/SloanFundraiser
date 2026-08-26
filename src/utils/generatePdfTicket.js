@@ -230,7 +230,7 @@ async function drawSingleTicketPage(pdf, booking, itemData) {
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(6.5);
   pdf.setTextColor(148, 163, 184);
-  pdf.text("Organizers: Nicole Jooste (071 113 4812) • Charlie Jooste (079 528 5350)", cardX + cardWidth / 2, cardX + 230, { align: 'center' });
+  pdf.text("Organizing Committee: Nicole Jooste (071 113 4812) • Marsha Beukes (079 528 5350)", cardX + cardWidth / 2, 248, { align: 'center' });
 }
 
 /**

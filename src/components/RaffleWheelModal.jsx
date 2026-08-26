@@ -12,6 +12,69 @@ const DEFAULT_PRIZES = [
   { id: 7, drawOrder: 7, title: '🌟 GRAND FINALE: Whole Lamb', subtitle: 'Fresh Whole Lamb (Grand Prize Drawn Last!)', value: 'R2,000', icon: '🥩', isGrandPrize: true }
 ];
 
+// Helper to shuffle & distribute tickets so identical names are spaced apart and never adjacent
+function distributeTicketsNonAdjacent(ticketsList) {
+  if (!ticketsList || ticketsList.length <= 1) return ticketsList || [];
+
+  // Group tickets by entrant name
+  const groups = {};
+  ticketsList.forEach(t => {
+    const key = (t.name || '').trim().toLowerCase();
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+
+  // Shuffle within each group
+  Object.values(groups).forEach(grp => {
+    for (let i = grp.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [grp[i], grp[j]] = [grp[j], grp[i]];
+    }
+  });
+
+  // Sort groups by size descending
+  const sortedGroups = Object.values(groups).sort((a, b) => b.length - a.length);
+
+  const total = ticketsList.length;
+  const result = new Array(total).fill(null);
+
+  // Distribute tickets round-robin with jump step
+  let currentIndex = 0;
+  for (const group of sortedGroups) {
+    for (const item of group) {
+      while (result[currentIndex] !== null) {
+        currentIndex = (currentIndex + 1) % total;
+      }
+      result[currentIndex] = item;
+      currentIndex = (currentIndex + 2) % total;
+    }
+  }
+
+  // Swap any remaining adjacent duplicates
+  for (let i = 0; i < result.length; i++) {
+    const next = (i + 1) % result.length;
+    if (result[i] && result[next] && result[i].name.trim().toLowerCase() === result[next].name.trim().toLowerCase()) {
+      for (let j = 0; j < result.length; j++) {
+        const prevJ = (j - 1 + result.length) % result.length;
+        const nextJ = (j + 1) % result.length;
+        if (
+          result[j] &&
+          result[j].name.trim().toLowerCase() !== result[i].name.trim().toLowerCase() &&
+          result[prevJ]?.name.trim().toLowerCase() !== result[i].name.trim().toLowerCase() &&
+          result[nextJ]?.name.trim().toLowerCase() !== result[i].name.trim().toLowerCase()
+        ) {
+          const temp = result[next];
+          result[next] = result[j];
+          result[j] = temp;
+          break;
+        }
+      }
+    }
+  }
+
+  return result.filter(Boolean);
+}
+
 export default function RaffleWheelModal({ isOpen, onClose, bookings = [] }) {
   const [spinning, setSpinning] = useState(false);
   const [rotationDegree, setRotationDegree] = useState(0);
@@ -69,7 +132,9 @@ export default function RaffleWheelModal({ isOpen, onClose, bookings = [] }) {
     const winnerNames = new Set((wonPrizes || []).map(wp => (wp?.winner?.name || '').trim().toLowerCase()).filter(Boolean));
     const remainingTickets = list.filter(p => !winnerNames.has((p?.name || '').trim().toLowerCase()));
 
-    setParticipants(remainingTickets);
+    // Distribute remaining tickets non-adjacently
+    const distributed = distributeTicketsNonAdjacent(remainingTickets);
+    setParticipants(distributed);
   }, [bookings, isOpen, wonPrizes]);
 
   if (!isOpen) return null;
@@ -99,9 +164,18 @@ export default function RaffleWheelModal({ isOpen, onClose, bookings = [] }) {
     const randomIndex = Math.floor(Math.random() * participants.length);
     const winningParticipant = participants[randomIndex];
 
-    const extraSpins = 10 * 360;
-    const targetSegmentOffset = 360 - (randomIndex * segmentAngle + segmentAngle / 2);
-    const finalDegree = rotationDegree + extraSpins + targetSegmentOffset;
+    // Mathematically exact pointer alignment:
+    // Slice i center angle measured clockwise from top (12 o'clock) is randomIndex * segmentAngle + segmentAngle / 2
+    // Top pointer is at 12 o'clock (0 deg).
+    const extraSpins = 10 * 360; // 10 complete 360-degree rotations
+    const sliceCenterAngle = randomIndex * segmentAngle + segmentAngle / 2;
+    const desiredNormalizedAngle = (360 - (sliceCenterAngle % 360)) % 360;
+    const currentNormalizedAngle = rotationDegree % 360;
+    let delta = desiredNormalizedAngle - currentNormalizedAngle;
+    if (delta < 0) {
+      delta += 360;
+    }
+    const finalDegree = rotationDegree + extraSpins + delta;
 
     setRotationDegree(finalDegree);
 

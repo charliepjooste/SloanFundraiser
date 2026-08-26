@@ -112,7 +112,7 @@ export default function App() {
 
   // Total funds raised & stats calculation in ZAR (R) - Starts completely at 0
   const totalAmountRaised = bookings.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
-  const targetGoal = 100000;
+  const targetGoal = 75000;
   const progressPercent = Math.min(100, Math.round((totalAmountRaised / targetGoal) * 100));
   const totalTicketsSold = bookings.reduce((sum, b) => sum + (Number(b.numTickets) || 0), 0);
   const totalRaffleTicketsSold = bookings.reduce((sum, b) => sum + (Number(b.raffleTicketsCount) || 0), 0);
@@ -297,7 +297,7 @@ export default function App() {
             </button>
             
             {/* Admin-only Tabs */}
-            {isAdmin ? (
+            {isAdmin && (
               <>
                 <button
                   onClick={() => setActiveTab('seating')}
@@ -318,13 +318,6 @@ export default function App() {
                   Door Check-In
                 </button>
               </>
-            ) : (
-              <button
-                onClick={() => setActiveTab('seating')}
-                className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'seating' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
-              >
-                35 Tables Map
-              </button>
             )}
 
             <button
@@ -403,9 +396,9 @@ export default function App() {
       {/* Mobile Tab Bar */}
       <div className="lg:hidden flex items-center justify-around bg-white border-b border-purple-200 p-2 text-xs font-bold overflow-x-auto shadow-sm">
         <button onClick={() => setActiveTab('overview')} className={activeTab === 'overview' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Overview</button>
-        <button onClick={() => setActiveTab('seating')} className={activeTab === 'seating' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>35 Tables</button>
         {isAdmin && (
           <>
+            <button onClick={() => setActiveTab('seating')} className={activeTab === 'seating' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>35 Tables</button>
             <button onClick={() => setActiveTab('guests')} className={activeTab === 'guests' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Guests</button>
             <button onClick={() => setActiveTab('checkin')} className={activeTab === 'checkin' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Check-In</button>
             <button onClick={() => setIsRaffleWheelOpen(true)} className="text-purple-900 font-black flex items-center gap-1">
@@ -413,6 +406,7 @@ export default function App() {
             </button>
           </>
         )}
+        <button onClick={() => setActiveTab('wall')} className={activeTab === 'wall' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Wall</button>
         <button onClick={() => setIsMyTicketsOpen(true)} className="text-purple-950 font-black flex items-center gap-1">
           <Ticket className="w-3.5 h-3.5 text-emerald-600" /> My Passes
         </button>
@@ -939,8 +933,8 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: SEATING ARRANGEMENT & TABLE MANAGEMENT (35 TABLES) */}
-        {activeTab === 'seating' && (
+        {/* TAB 2: SEATING ARRANGEMENT & TABLE MANAGEMENT (35 TABLES - Admin Only) */}
+        {activeTab === 'seating' && isAdmin && (
           <SeatingArrangementTab 
             bookings={bookings}
             tablesData={tablesData}

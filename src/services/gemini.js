@@ -42,7 +42,7 @@ Event Details:
   6. 6th Draw: Photoshoot for a Couple (Value: R2,500)
   7. 7th Draw (GRAND FINALE): Whole Lamb (Value: R2,000) — Drawn Last!
 - Banking Details for Raffle Tickets: FNB/RMB | Acc Holder: Charlton Jooste | Acc: 62334900091 | Branch: 250655 | Ref: [Ticket Number / Booking ID]
-- Contacts: Nicole Jooste (071 113 4812) / Charlie Jooste (079 528 5350)
+- Contacts: Nicole Jooste (071 113 4812) / Marsha Beukes (079 528 5350)
 
 Guest Question: ${userPrompt}`
       });
@@ -72,8 +72,8 @@ Guest Question: ${userPrompt}`
   if (promptLower.includes('time') || promptLower.includes('when') || promptLower.includes('date')) {
     return "📅 **Date & Time**: Friday, 09 October 2026 from **19:00 to 00:00 (Midnight)**. The **Raffle Draw** is held from **21:00 to 21:30**.";
   }
-  if (promptLower.includes('contact') || promptLower.includes('nicole') || promptLower.includes('charlie') || promptLower.includes('phone')) {
-    return "📞 **Event Contacts**:\n• Nicole Jooste: 071 113 4812\n• Charlie Jooste: 079 528 5350";
+  if (promptLower.includes('contact') || promptLower.includes('nicole') || promptLower.includes('marsha') || promptLower.includes('phone')) {
+    return "📞 **Event Contacts**:\n• Nicole Jooste: 071 113 4812\n• Marsha Beukes: 079 528 5350";
   }
   if (promptLower.includes('table') || promptLower.includes('ticket') || promptLower.includes('price')) {
     return "🎟️ **Tickets & Tables**: Standard Dance Tickets are R150 per person. Full Private Tables of 10 are R1,500 (35 Tables total). Raffle tickets are R50 for 1 or R100 for 3.";
