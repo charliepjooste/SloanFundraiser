@@ -147,36 +147,46 @@ The system will then instantly allocate their table seats and issue their offici
 }
 
 /**
- * Generate full text email confirmation body for Guest
+ * Generate full text email confirmation body for Guest with complete event details
  */
 export function generateTicketEmailBody(booking) {
   const ticketRef = getShortReference(booking);
+  const seatsText = booking.allocatedSeats && booking.allocatedSeats.length > 0
+    ? `Seat(s) #${booking.allocatedSeats.join(', ')}`
+    : `${booking.numTickets || 1} Seat(s)`;
+
   const tableText = booking.tableBookingOption === 'Raffle Tickets Only' 
-    ? '🎟️ Raffle Supporter Pass' 
-    : `Table #${booking.tableNumber || 1} (${booking.tableBookingOption || 'Standard Dance Ticket'})`;
+    ? '🎟️ Raffle Supporter Pass (No Table Seat)' 
+    : `Table #${booking.tableNumber || 1} • ${seatsText} (${booking.tableBookingOption || 'Standard Dance Ticket'})`;
 
   const isEftPending = booking.paymentStatus === 'pending_eft';
 
-  return `💚 ${isEftPending ? 'EFT BOOKING SUBMISSION RECEIVED' : 'TICKET CONFIRMATION'}: SLOAN JOOSTE'S FUNDRAISER DANCE 💚
+  return `💚 THANK YOU FOR YOUR TICKET PURCHASE: SLOAN JOOSTE'S FUNDRAISER DANCE 💚
 
-Dear ${booking.firstName} ${booking.surname},
+Dear ${booking.firstName || ''} ${booking.surname || ''},
 
-Thank you for your generous support for Sloan Jooste in aid of his post-op physiotherapy, treatment, and Cerebral Palsy care!
+Thank you for your ticket purchase and generous support in aid of Sloan Jooste's post-op physiotherapy, rehabilitation, and Cerebral Palsy care!
 
 ==================================================
-🎟️ YOUR BOOKING DETAILS & STATUS
+🎟️ YOUR RESERVATION DETAILS
 ==================================================
 • Ticket Reference: ${ticketRef}
-• Guest Name: ${booking.firstName} ${booking.surname}
-• Seating / Table Allocation: ${tableText}
+• Guest Name: ${booking.firstName || ''} ${booking.surname || ''}
+• Table Allocation: Table #${booking.tableNumber || 1}
+• Seat Allocation: ${seatsText}
 • Dance Tickets Reserved: ${booking.numTickets || 1} Seat(s)
-• Raffle Tickets Included: ${booking.raffleTicketsCount || 0} Ticket(s)
-• Amount: R${booking.amount || 0} (${booking.paymentMethod === 'eft' ? 'Direct EFT' : 'Card / Instant'})
-• Status: ${isEftPending ? '⏳ Pending Bank Funds Clearance by Organizers' : '✅ Confirmed & Paid'}
+• Raffle Tickets: ${booking.raffleTicketsCount || 0} Entry/ies
+• Total Amount: R${booking.amount || 0}
+• Payment Method: ${booking.paymentMethod === 'eft' ? 'Direct EFT Bank Transfer' : 'Instant Transfer'}
+• Status: ${isEftPending ? '⏳ Awaiting EFT Payment & Clearance' : '✅ Confirmed & Paid'}
 
-${isEftPending ? `
 ==================================================
-🏦 EFT BANK PAYMENT INSTRUCTIONS
+📢 TICKET DELIVERY & EFT CLEARANCE NOTICE
+==================================================
+*Once your ticket purchase EFT has been cleared by organizers Charlie or Nicole, your official digital ticket passes with individual QR check-in codes will be sent via WhatsApp and Email!*
+
+==================================================
+🏦 BANKING DETAILS FOR DIRECT EFT PAYMENT
 ==================================================
 Please make an EFT transfer to:
 • Bank: ${EVENT_DETAILS.banking.bank}
@@ -184,31 +194,43 @@ Please make an EFT transfer to:
 • Account Type: ${EVENT_DETAILS.banking.accountType}
 • Account Number: ${EVENT_DETAILS.banking.accountNumber}
 • Branch Code: ${EVENT_DETAILS.banking.branchCode}
-• Payment Reference: ${ticketRef} (Important: use your reference: ${ticketRef})
+• Payment Reference: ${ticketRef} (Important: Please use reference ${ticketRef})
 
-*Note: Your tickets will be officially allocated once the organizers (Charlie or Nicole) have cleared the funds in the bank. Your official digital QR pass will then be sent to you via Email and WhatsApp!*
-` : `
 ==================================================
 📍 EVENT DETAILS & VENUE
 ==================================================
+• Event: ${EVENT_DETAILS.name}
 • Date: ${EVENT_DETAILS.date}
 • Event Time: ${EVENT_DETAILS.time}
-• Highlight Raffle Draw: ${EVENT_DETAILS.raffleTime}
+• Highlight Raffle Draw: ${EVENT_DETAILS.raffleTime} (Grand Finale Prize: Whole Lamb!)
 • Venue: ${EVENT_DETAILS.venue}
 • Address: ${EVENT_DETAILS.address}
 • Google Maps Link: ${EVENT_DETAILS.googleMapsUrl}
 • Dress Code: ${EVENT_DETAILS.dressCode}
 • Refreshments: ${EVENT_DETAILS.byo}
 • Entertainment: ${EVENT_DETAILS.entertainment}
-`}
 
 ==================================================
-📞 EVENT CONTACTS
+📞 ORGANIZING COMMITTEE CONTACTS
 ==================================================
 • Nicole Jooste: 071 113 4812 (nicolejooste8@gmail.com)
 • Charlie Jooste: 079 528 5350 (charliepjooste@gmail.com)
 
-Thank you for supporting Sloan! 💚`;
+Thank you for your love, generosity, and support for Sloan! 💚`;
+}
+
+/**
+ * Open direct Gmail Web Compose window with complete ticket confirmation email
+ */
+export function openGmailCompose(booking) {
+  if (!booking) return;
+  const ticketRef = getShortReference(booking);
+  const subject = encodeURIComponent(`🎟️ Thank You for Your Ticket Purchase: Sloan Jooste's Fundraiser Dance (${ticketRef})`);
+  const body = encodeURIComponent(generateTicketEmailBody(booking));
+  const recipient = (booking.email || '').trim();
+  
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipient)}&su=${subject}&body=${body}`;
+  window.open(gmailUrl, '_blank');
 }
 
 /**
@@ -413,8 +435,10 @@ export async function createBookingInFirestore(bookingData) {
     raffleEntrants: bookingData.raffleEntrants || [],
     tableBookingOption: bookingData.tableBookingOption || 'Standard Dance Ticket',
     tableNumber: Number(bookingData.tableNumber) || 1,
+    allocatedSeats: bookingData.allocatedSeats || [],
     guestNames: bookingData.guestNames || [],
     specialRequests: bookingData.specialRequests || '',
+    donationAmount: Number(bookingData.donationAmount) || 0,
     consentTerms: Boolean(bookingData.consentTerms),
     paymentStatus: paymentStatus,
     paymentMethod: bookingData.paymentMethod || 'card',

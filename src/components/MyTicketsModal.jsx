@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Ticket, 
@@ -11,22 +11,25 @@ import {
   Gift, 
   Calendar, 
   MapPin, 
-  ExternalLink,
-  CreditCard,
-  CheckCircle,
-  Plus,
-  Edit3,
-  UserCheck,
-  Save,
-  Lock,
-  Download
+  ExternalLink, 
+  CreditCard, 
+  CheckCircle, 
+  Check, 
+  Copy, 
+  Plus, 
+  Edit3, 
+  UserCheck, 
+  Save, 
+  Lock, 
+  Download 
 } from 'lucide-react';
 import { 
   EVENT_DETAILS, 
   getShortReference, 
   generateWhatsAppMessage, 
   generateTicketEmailBody,
-  updateGuestRecord
+  updateGuestRecord,
+  openGmailCompose
 } from '../firebase';
 import { downloadTicketPdf } from '../utils/generatePdfTicket';
 
@@ -165,6 +168,27 @@ export default function MyTicketsModal({
     }
   };
 
+  const [copiedField, setCopiedField] = useState(null);
+
+  const copyToClipboard = (text, fieldName) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopiedField(fieldName);
+      setTimeout(() => setCopiedField(null), 2500);
+    } catch (err) {
+      console.error("Copy failed:", err);
+    }
+  };
+
   const handleWhatsApp = (booking) => {
     const phone = (booking.mobileNumber || '').replace(/[^0-9]/g, '');
     const text = generateWhatsAppMessage(booking);
@@ -176,10 +200,7 @@ export default function MyTicketsModal({
   };
 
   const handleGmail = (booking) => {
-    const ticketRef = getShortReference(booking);
-    const subject = encodeURIComponent(`🎟️ My Ticket Pass - Sloan Jooste's Fundraiser Dance (${ticketRef})`);
-    const body = encodeURIComponent(generateTicketEmailBody(booking));
-    window.open(`mailto:${booking.email}?subject=${subject}&body=${body}`, '_blank');
+    openGmailCompose(booking);
   };
 
   return (
@@ -286,15 +307,21 @@ export default function MyTicketsModal({
                     const seatItems = [];
                     if (b.tableBookingOption !== 'Raffle Tickets Only') {
                       const seatsCount = b.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(b.numTickets) || 1);
+                      const allocatedSeats = (b.allocatedSeats && Array.isArray(b.allocatedSeats) && b.allocatedSeats.length > 0)
+                        ? b.allocatedSeats
+                        : Array.from({ length: seatsCount }, (_, i) => i + 1);
+
                       for (let s = 1; s <= seatsCount; s++) {
+                        const seatNumber = allocatedSeats[s - 1] || s;
                         const name = (b.guestNames && b.guestNames[s - 1] && b.guestNames[s - 1].trim())
                           ? b.guestNames[s - 1].trim()
-                          : (s === 1 ? `${b.firstName} ${b.surname}` : `${b.firstName} ${b.surname} (Seat ${s})`);
+                          : (s === 1 ? `${b.firstName} ${b.surname}` : `${b.firstName} ${b.surname} (Seat #${seatNumber})`);
                         
                         seatItems.push({
                           type: 'seat',
-                          passRef: `${ticketRef}-S${s}`,
-                          label: `Seat #${s}`,
+                          passRef: `${ticketRef}-S${seatNumber}`,
+                          label: `Seat #${seatNumber}`,
+                          seatNumber,
                           attendeeName: name
                         });
                       }
@@ -449,6 +476,60 @@ export default function MyTicketsModal({
                             </div>
                           )}
                         </div>
+
+                        {/* Banking Details Box if Pending EFT */}
+                        {isEftPending && (
+                          <div className="p-3.5 rounded-2xl bg-slate-50 border border-purple-200 text-xs space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-black text-purple-950 flex items-center gap-1.5">
+                                <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
+                                EFT Payment Details:
+                              </span>
+                              <span className="font-black text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[11px]">
+                                Amount Due: R{b.amount}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-800">
+                              <div className="p-2 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block">Bank & Account Holder</span>
+                                  <span className="font-bold text-[11px] text-slate-900">{EVENT_DETAILS.banking.bank} • {EVENT_DETAILS.banking.accountHolder}</span>
+                                </div>
+                              </div>
+
+                              <div className="p-2 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block">Account Number</span>
+                                  <span className="font-mono font-black text-purple-950 text-xs">{EVENT_DETAILS.banking.accountNumber}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(EVENT_DETAILS.banking.accountNumber, `acc-${b.id}`)}
+                                  className="px-2 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-900 text-[10px] font-bold flex items-center gap-1 transition shadow-2xs"
+                                >
+                                  {copiedField === `acc-${b.id}` ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                  {copiedField === `acc-${b.id}` ? 'Copied' : 'Copy'}
+                                </button>
+                              </div>
+
+                              <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between sm:col-span-2">
+                                <div>
+                                  <span className="text-[9px] text-emerald-800 block">Payment Reference</span>
+                                  <span className="font-mono font-black text-emerald-950 text-xs">{ticketRef}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(ticketRef, `ref-${b.id}`)}
+                                  className="px-2 py-1 rounded-lg bg-emerald-200 hover:bg-emerald-300 text-emerald-950 text-[10px] font-bold flex items-center gap-1 transition shadow-2xs"
+                                >
+                                  {copiedField === `ref-${b.id}` ? <Check className="w-3 h-3 text-emerald-800" /> : <Copy className="w-3 h-3" />}
+                                  {copiedField === `ref-${b.id}` ? 'Copied' : 'Copy'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Action Buttons: Pass, Edit Attendees, WhatsApp, Gmail */}
                         <div className="pt-2 flex flex-wrap items-center gap-2">

@@ -22,17 +22,21 @@ import {
   Phone,
   Lock,
   LogOut,
-  UserCheck,
   RotateCcw,
   CheckCircle,
-  CreditCard
+  CreditCard,
+  Copy,
+  Check,
+  X
 } from 'lucide-react';
 
 import { 
   subscribeBookings, 
   subscribeTables, 
   EVENT_DETAILS, 
+  getShortReference,
   generateWhatsAppMessage,
+  openGmailCompose,
   deleteGuestRecord,
   isUserAdmin
 } from './firebase';
@@ -46,10 +50,9 @@ import GeminiConcierge from './components/GeminiConcierge';
 import RaffleWheelModal from './components/RaffleWheelModal';
 import MyTicketsModal from './components/MyTicketsModal';
 import AdminLoginModal from './components/AdminLoginModal';
-import DonationsManagementTab from './components/DonationsManagementTab';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'seating', 'guests', 'checkin', 'donations', 'wall'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'seating', 'guests', 'checkin', 'wall'
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [bookingDefaultOption, setBookingDefaultOption] = useState('Standard Dance Ticket');
   const [isRaffleWheelOpen, setIsRaffleWheelOpen] = useState(false);
@@ -134,7 +137,28 @@ export default function App() {
     ? bookings.filter(b => (b.email || '').trim().toLowerCase() === guestEmail.trim().toLowerCase()).length 
     : 0;
 
-  const handleCopyLink = () => {
+  const [copiedField, setCopiedField] = useState(null);
+
+  const copyToClipboard = (text, fieldName) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopiedField(fieldName);
+      setTimeout(() => setCopiedField(null), 2500);
+    } catch (err) {
+      console.error("Copy failed:", err);
+    }
+  };
+
+  const handleShareApp = () => {
     navigator.clipboard.writeText(window.location.href);
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 3000);
@@ -287,12 +311,6 @@ export default function App() {
                   Guest & Ticket Manager
                 </button>
                 <button
-                  onClick={() => setActiveTab('donations')}
-                  className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'donations' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
-                >
-                  💝 Donations
-                </button>
-                <button
                   onClick={() => setActiveTab('checkin')}
                   className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'checkin' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
                 >
@@ -388,7 +406,6 @@ export default function App() {
         {isAdmin && (
           <>
             <button onClick={() => setActiveTab('guests')} className={activeTab === 'guests' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Guests</button>
-            <button onClick={() => setActiveTab('donations')} className={activeTab === 'donations' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Donations</button>
             <button onClick={() => setActiveTab('checkin')} className={activeTab === 'checkin' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Check-In</button>
             <button onClick={() => setIsRaffleWheelOpen(true)} className="text-purple-900 font-black flex items-center gap-1">
               <Gift className="w-3.5 h-3.5 text-emerald-600" /> Wheel
@@ -470,32 +487,55 @@ export default function App() {
 
             {/* Bank Payment Details Box */}
             <div className="p-4 sm:p-5 rounded-2xl bg-white text-slate-900 shadow-md space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-xs font-black uppercase text-purple-950 flex items-center gap-1.5">
                   <CreditCard className="w-4 h-4 text-emerald-600" />
                   FNB Bank Details for EFT Payment:
                 </span>
                 <span className="text-xs font-black text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
-                  Amount Due: R{bookingSuccessToast.amount}
+                  Amount Due: R{bookingSuccessToast.amount} {bookingSuccessToast.allocatedSeats && bookingSuccessToast.allocatedSeats.length > 0 ? `(Table #${bookingSuccessToast.tableNumber} • Seat(s) #${bookingSuccessToast.allocatedSeats.join(', ')})` : ''}
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs font-mono">
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Bank</span>
-                  <span className="font-bold text-slate-900">{EVENT_DETAILS.banking.bank}</span>
+                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Bank & Account Holder</span>
+                  <span className="font-bold text-slate-900">{EVENT_DETAILS.banking.bank} • {EVENT_DETAILS.banking.accountHolder}</span>
                 </div>
+
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Account Holder</span>
-                  <span className="font-bold text-slate-900">{EVENT_DETAILS.banking.accountHolder}</span>
+                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Account Type & Branch</span>
+                  <span className="font-bold text-slate-900">{EVENT_DETAILS.banking.accountType} ({EVENT_DETAILS.banking.branchCode})</span>
                 </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Account Number</span>
-                  <span className="font-black text-purple-950">{EVENT_DETAILS.banking.accountNumber}</span>
+
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-sans font-bold text-slate-500 block">Account Number</span>
+                    <span className="font-black text-purple-950">{EVENT_DETAILS.banking.accountNumber}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(EVENT_DETAILS.banking.accountNumber, 'toast-acc')}
+                    className="px-2 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-950 text-[10px] font-bold flex items-center gap-1 transition shadow-2xs"
+                  >
+                    {copiedField === 'toast-acc' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    {copiedField === 'toast-acc' ? 'Copied' : 'Copy'}
+                  </button>
                 </div>
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <span className="text-[10px] font-sans font-bold text-emerald-900 block">Payment Reference</span>
-                  <span className="font-black text-emerald-950">{getShortReference(bookingSuccessToast)}</span>
+
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-sans font-bold text-emerald-900 block">Payment Reference</span>
+                    <span className="font-black text-emerald-950">{getShortReference(bookingSuccessToast)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(getShortReference(bookingSuccessToast), 'toast-ref')}
+                    className="px-2 py-1 rounded-lg bg-emerald-200 hover:bg-emerald-300 text-emerald-950 text-[10px] font-bold flex items-center gap-1 transition shadow-2xs"
+                  >
+                    {copiedField === 'toast-ref' ? <Check className="w-3 h-3 text-emerald-800" /> : <Copy className="w-3 h-3" />}
+                    {copiedField === 'toast-ref' ? 'Copied' : 'Copy'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -509,20 +549,16 @@ export default function App() {
                     const text = generateWhatsAppMessage(bookingSuccessToast);
                     window.open(`https://wa.me/?text=${text}`, '_blank');
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition shadow flex items-center gap-1.5"
+                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition shadow flex items-center gap-1.5 cursor-pointer"
                 >
                   <MessageCircle className="w-4 h-4" /> Send Proof on WhatsApp
                 </button>
 
                 <button
-                  onClick={() => {
-                    const subject = encodeURIComponent(`🎟️ EFT Payment Proof - ${bookingSuccessToast.firstName} ${bookingSuccessToast.surname} (${getShortReference(bookingSuccessToast)})`);
-                    const body = encodeURIComponent(`Dear Charlie and Nicole,\n\nPlease find attached the proof of EFT payment for my booking (${getShortReference(bookingSuccessToast)}) for Sloan Jooste's Fundraiser Dance.\n\nAmount: R${bookingSuccessToast.amount}\nGuest: ${bookingSuccessToast.firstName} ${bookingSuccessToast.surname}\n\nThank you!`);
-                    window.open(`mailto:charliepjooste@gmail.com,nicolejooste8@gmail.com?subject=${subject}&body=${body}`, '_blank');
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition shadow flex items-center gap-1.5"
+                  onClick={() => openGmailCompose(bookingSuccessToast)}
+                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition shadow flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Mail className="w-4 h-4" /> Email Proof of Payment
+                  <Mail className="w-4 h-4" /> Open in Gmail
                 </button>
               </div>
 
@@ -531,7 +567,7 @@ export default function App() {
                   setBookingSuccessToast(null);
                   setIsMyTicketsOpen(true);
                 }}
-                className="px-4 py-2.5 rounded-xl bg-white text-slate-900 font-black text-xs hover:bg-slate-100 transition shadow flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl bg-white text-slate-900 font-black text-xs hover:bg-slate-100 transition shadow flex items-center gap-1.5 cursor-pointer"
               >
                 <Ticket className="w-4 h-4 text-emerald-600" /> View in My Tickets
               </button>
@@ -924,17 +960,7 @@ export default function App() {
           />
         )}
 
-        {/* TAB 4: DONATIONS MANAGER (Admin Only) */}
-        {activeTab === 'donations' && isAdmin && (
-          <DonationsManagementTab 
-            bookings={bookings}
-            onUpdateBooking={handleUpdateBooking}
-            onAddBooking={handleAddBooking}
-            onDeleteBooking={handleDeleteBooking}
-          />
-        )}
-
-        {/* TAB 5: DOOR CHECK-IN DESK (Admin Only) */}
+        {/* TAB 4: DOOR CHECK-IN DESK (Admin Only) */}
         {activeTab === 'checkin' && isAdmin && (
           <CheckInPortal 
             bookings={bookings} 

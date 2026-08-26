@@ -25,7 +25,8 @@ import {
   generateWhatsAppMessage, 
   generateTicketEmailBody, 
   generateHtmlTicketEmail,
-  resendTicketEmail 
+  resendTicketEmail,
+  openGmailCompose 
 } from '../firebase';
 import { downloadTicketPdf } from '../utils/generatePdfTicket';
 
@@ -44,17 +45,23 @@ export default function DigitalTicketModal({ booking, onClose }) {
   // 1. Dance Seat Passes
   if (booking.tableBookingOption !== 'Raffle Tickets Only') {
     const seatsCount = booking.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(booking.numTickets) || 1);
+    const allocatedSeats = (booking.allocatedSeats && Array.isArray(booking.allocatedSeats) && booking.allocatedSeats.length > 0)
+      ? booking.allocatedSeats
+      : Array.from({ length: seatsCount }, (_, i) => i + 1);
+
     for (let s = 1; s <= seatsCount; s++) {
+      const seatNumber = allocatedSeats[s - 1] || s;
       const attendeeName = (booking.guestNames && booking.guestNames[s - 1] && booking.guestNames[s - 1].trim())
         ? booking.guestNames[s - 1].trim()
-        : (s === 1 ? `${booking.firstName} ${booking.surname}` : `${booking.firstName} ${booking.surname} (Guest ${s})`);
+        : (s === 1 ? `${booking.firstName} ${booking.surname}` : `${booking.firstName} ${booking.surname} (Seat #${seatNumber})`);
       
       issuedPasses.push({
-        id: `seat-${s}`,
+        id: `seat-${seatNumber}`,
         type: 'seat',
-        passRef: `${baseRef}-S${s}`,
-        label: `Seat #${s}`,
-        fullLabel: `Dance Seat #${s} of ${seatsCount}`,
+        passRef: `${baseRef}-S${seatNumber}`,
+        label: `Seat #${seatNumber}`,
+        fullLabel: `Table #${booking.tableNumber || 1} • Seat #${seatNumber}`,
+        seatNumber,
         attendeeName,
         tableNumber: booking.tableNumber || 1
       });
@@ -158,9 +165,7 @@ export default function DigitalTicketModal({ booking, onClose }) {
   };
 
   const handleOpenGmail = () => {
-    const subject = encodeURIComponent(`🎟️ Ticket Confirmation - Sloan Jooste's Fundraiser Dance (${baseRef})`);
-    const body = encodeURIComponent(generateTicketEmailBody(booking));
-    window.open(`mailto:${booking.email}?subject=${subject}&body=${body}`, '_blank');
+    openGmailCompose(booking);
   };
 
   return (

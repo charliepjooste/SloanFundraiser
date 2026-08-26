@@ -255,15 +255,21 @@ export async function downloadTicketPdf(booking, specificItem = null) {
     const isRaffleOnly = booking.tableBookingOption === 'Raffle Tickets Only';
     if (!isRaffleOnly) {
       const seatsCount = booking.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(booking.numTickets) || 1);
+      const allocatedSeats = (booking.allocatedSeats && Array.isArray(booking.allocatedSeats) && booking.allocatedSeats.length > 0)
+        ? booking.allocatedSeats
+        : Array.from({ length: seatsCount }, (_, i) => i + 1);
+
       for (let s = 1; s <= seatsCount; s++) {
+        const seatNumber = allocatedSeats[s - 1] || s;
         const attendeeName = (booking.guestNames && booking.guestNames[s - 1] && booking.guestNames[s - 1].trim())
           ? booking.guestNames[s - 1].trim()
-          : (s === 1 ? `${booking.firstName} ${booking.surname}` : `${booking.firstName} ${booking.surname} (Guest ${s})`);
+          : (s === 1 ? `${booking.firstName} ${booking.surname}` : `${booking.firstName} ${booking.surname} (Seat #${seatNumber})`);
         
         items.push({
           type: 'seat',
-          passRef: `${baseRef}-S${s}`,
-          label: `Seat #${s} of ${seatsCount}`,
+          passRef: `${baseRef}-S${seatNumber}`,
+          label: `Table #${booking.tableNumber || 1} • Seat #${seatNumber}`,
+          seatNumber,
           attendeeName
         });
       }
