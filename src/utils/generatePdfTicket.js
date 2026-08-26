@@ -137,7 +137,12 @@ async function drawSingleTicketPage(pdf, booking, itemData) {
   pdf.text("TABLE ALLOCATION", col1X + 4, currentY + 4.5);
   pdf.setFontSize(9);
   pdf.setTextColor(59, 7, 100);
-  const tableText = isRafflePass ? 'Raffle Supporter' : `Table #${booking.tableNumber || 1}`;
+  const isDonationPass = booking.tableBookingOption === 'Direct Donation Only' || itemData.type === 'donation';
+  const tableText = isRafflePass 
+    ? 'Raffle Supporter' 
+    : isDonationPass 
+    ? 'Donation Supporter' 
+    : `Table #${booking.tableNumber || 1}`;
   pdf.text(tableText, col1X + 4, currentY + 9.5);
 
   // Box 2: Ticket Type
@@ -150,7 +155,12 @@ async function drawSingleTicketPage(pdf, booking, itemData) {
   pdf.text("PASS TYPE", col2X + 4, currentY + 4.5);
   pdf.setFontSize(8.5);
   pdf.setTextColor(20, 83, 45);
-  pdf.text(itemData.label || '1 Dance Ticket Seat', col2X + 4, currentY + 9.5);
+  const passTypeText = isRafflePass 
+    ? 'Charity Raffle Pass' 
+    : isDonationPass 
+    ? 'Direct Donation' 
+    : (itemData.label || '1 Dance Ticket Seat');
+  pdf.text(passTypeText, col2X + 4, currentY + 9.5);
 
   currentY += rowHeight + 3;
 
@@ -251,9 +261,11 @@ export async function downloadTicketPdf(booking, specificItem = null) {
   if (specificItem) {
     items = [specificItem];
   } else {
-    // 1. Dance Seat Passes
+    // 1. Dance Seat Passes (Only for dance tickets)
     const isRaffleOnly = booking.tableBookingOption === 'Raffle Tickets Only';
-    if (!isRaffleOnly) {
+    const isDonationOnly = booking.tableBookingOption === 'Direct Donation Only';
+
+    if (!isRaffleOnly && !isDonationOnly && (Number(booking.numTickets) || 0) > 0) {
       const seatsCount = booking.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(booking.numTickets) || 1);
       const allocatedSeats = (booking.allocatedSeats && Array.isArray(booking.allocatedSeats) && booking.allocatedSeats.length > 0)
         ? booking.allocatedSeats
@@ -293,9 +305,9 @@ export async function downloadTicketPdf(booking, specificItem = null) {
 
     if (items.length === 0) {
       items.push({
-        type: 'seat',
+        type: isDonationOnly ? 'donation' : 'seat',
         passRef: baseRef,
-        label: 'Official Supporter Pass',
+        label: isDonationOnly ? 'Direct Medical Donation' : 'Official Supporter Pass',
         attendeeName: `${booking.firstName} ${booking.surname}`
       });
     }

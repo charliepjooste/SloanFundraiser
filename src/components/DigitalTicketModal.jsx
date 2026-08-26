@@ -42,8 +42,11 @@ export default function DigitalTicketModal({ booking, onClose }) {
   // Build the list of all individually issued passes for this booking
   const issuedPasses = [];
 
-  // 1. Dance Seat Passes
-  if (booking.tableBookingOption !== 'Raffle Tickets Only') {
+  const isRaffleOnly = booking.tableBookingOption === 'Raffle Tickets Only';
+  const isDonationOnly = booking.tableBookingOption === 'Direct Donation Only';
+
+  // 1. Dance Seat Passes (Only for dance tickets)
+  if (!isRaffleOnly && !isDonationOnly && (Number(booking.numTickets) || 0) > 0) {
     const seatsCount = booking.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(booking.numTickets) || 1);
     const allocatedSeats = (booking.allocatedSeats && Array.isArray(booking.allocatedSeats) && booking.allocatedSeats.length > 0)
       ? booking.allocatedSeats
@@ -68,7 +71,7 @@ export default function DigitalTicketModal({ booking, onClose }) {
     }
   }
 
-  // 2. Raffle Ticket Passes
+  // 2. Raffle Ticket Passes (NO SEATS ALLOCATED)
   const raffleCount = Number(booking.raffleTicketsCount) || 0;
   for (let r = 1; r <= raffleCount; r++) {
     const entrant = (booking.raffleEntrants && booking.raffleEntrants[r - 1]) ? booking.raffleEntrants[r - 1] : null;
@@ -83,19 +86,19 @@ export default function DigitalTicketModal({ booking, onClose }) {
       label: `Raffle #${r}`,
       fullLabel: `Charity Raffle Ticket #${r} of ${raffleCount}`,
       attendeeName: entrantName,
-      tableNumber: booking.tableNumber || 1
+      tableNumber: null
     });
   }
 
   if (issuedPasses.length === 0) {
     issuedPasses.push({
       id: 'default-1',
-      type: 'seat',
+      type: isDonationOnly ? 'donation' : 'supporter',
       passRef: baseRef,
-      label: 'Pass #1',
-      fullLabel: 'Official Supporter Pass',
+      label: isDonationOnly ? 'Direct Donation' : 'Pass #1',
+      fullLabel: isDonationOnly ? 'Direct Medical Donation Supporter' : 'Official Supporter Pass',
       attendeeName: `${booking.firstName} ${booking.surname}`,
-      tableNumber: booking.tableNumber || 1
+      tableNumber: null
     });
   }
 

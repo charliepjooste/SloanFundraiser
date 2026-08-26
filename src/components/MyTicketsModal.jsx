@@ -29,7 +29,8 @@ import {
   generateWhatsAppMessage, 
   generateTicketEmailBody,
   updateGuestRecord,
-  openGmailCompose
+  openGmailCompose,
+  matchBookingSearch
 } from '../firebase';
 import { downloadTicketPdf } from '../utils/generatePdfTicket';
 
@@ -43,17 +44,17 @@ export default function MyTicketsModal({
   onSelectTicketPass,
   onUpdateBooking
 }) {
-  const [inputEmail, setInputEmail] = useState(currentEmail || '');
-  const [activeEmail, setActiveEmail] = useState(currentEmail || '');
+  const [inputSearch, setInputSearch] = useState(currentEmail || '');
+  const [activeSearch, setActiveSearch] = useState(currentEmail || '');
   const [downloadingId, setDownloadingId] = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
 
   // Auto-load email from prop or localStorage on modal open
   useEffect(() => {
-    const emailToUse = (currentEmail || localStorage.getItem('sloan_guest_email') || '').trim().toLowerCase();
-    if (emailToUse) {
-      setInputEmail(emailToUse);
-      setActiveEmail(emailToUse);
+    const initialQuery = (currentEmail || localStorage.getItem('sloan_guest_email') || '').trim();
+    if (initialQuery) {
+      setInputSearch(initialQuery);
+      setActiveSearch(initialQuery);
     }
   }, [isOpen, currentEmail]);
 
@@ -65,16 +66,23 @@ export default function MyTicketsModal({
 
   if (!isOpen) return null;
 
-  // Filter bookings by active email
-  const userBookings = activeEmail 
-    ? bookings.filter(b => (b.email || '').trim().toLowerCase() === activeEmail.trim().toLowerCase())
+  // Filter bookings by active email OR ticket reference
+  const userBookings = activeSearch 
+    ? bookings.filter(b => {
+        const matchesEmail = (b.email || '').trim().toLowerCase() === activeSearch.trim().toLowerCase();
+        const matchesRef = matchBookingSearch(b, activeSearch);
+        return matchesEmail || matchesRef;
+      })
     : [];
 
   const handleSearch = (e) => {
     e.preventDefault();
-    if (inputEmail.trim()) {
-      setActiveEmail(inputEmail.trim().toLowerCase());
-      if (onEmailChange) onEmailChange(inputEmail.trim().toLowerCase());
+    if (inputSearch.trim()) {
+      const query = inputSearch.trim();
+      setActiveSearch(query);
+      if (query.includes('@') && onEmailChange) {
+        onEmailChange(query.toLowerCase());
+      }
     }
   };
 
@@ -236,19 +244,19 @@ export default function MyTicketsModal({
         {/* Content Area */}
         <div className="p-6 space-y-6 overflow-y-auto">
           
-          {/* Email Search Box */}
+          {/* Email / Reference Search Box */}
           <form onSubmit={handleSearch} className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200 space-y-3">
             <label className="block text-xs font-black text-purple-950">
-              Enter the Email Address used during booking:
+              Enter your Email Address OR Ticket Reference (e.g. SJ-7046 / SJ-7046-S8):
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Mail className="w-4 h-4 text-purple-700 absolute left-3 top-3" />
+                <Search className="w-4 h-4 text-purple-700 absolute left-3 top-3" />
                 <input 
-                  type="email" 
-                  value={inputEmail}
-                  onChange={(e) => setInputEmail(e.target.value)}
-                  placeholder="e.g. yourname@gmail.com"
+                  type="text" 
+                  value={inputSearch}
+                  onChange={(e) => setInputSearch(e.target.value)}
+                  placeholder="e.g. yourname@gmail.com OR SJ-7046"
                   required
                   className="w-full pl-9 pr-3 py-2 bg-white border border-purple-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 font-medium"
                 />
@@ -257,17 +265,17 @@ export default function MyTicketsModal({
                 type="submit"
                 className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-xs rounded-xl shadow transition flex items-center gap-1.5 shrink-0"
               >
-                <Search className="w-3.5 h-3.5" /> Find My Tickets
+                <Search className="w-3.5 h-3.5" /> Find Tickets
               </button>
             </div>
           </form>
 
           {/* Tickets Display */}
-          {activeEmail && (
+          {activeSearch && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-slate-900">
-                  Tickets linked to: <span className="text-purple-900 font-mono">{activeEmail}</span> ({userBookings.length} found)
+                  Search results for: <span className="text-purple-900 font-mono">{activeSearch}</span> ({userBookings.length} found)
                 </span>
                 <button
                   onClick={() => {
@@ -283,9 +291,9 @@ export default function MyTicketsModal({
               {userBookings.length === 0 ? (
                 <div className="p-8 text-center rounded-3xl border border-slate-200 bg-slate-50 space-y-3">
                   <Ticket className="w-10 h-10 text-slate-300 mx-auto" />
-                  <h4 className="font-extrabold text-slate-700 text-sm">No tickets found for this email address</h4>
+                  <h4 className="font-extrabold text-slate-700 text-sm">No tickets found matching "{activeSearch}"</h4>
                   <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                    Please make sure you typed the exact email address used when booking, or book your tickets below!
+                    Please make sure you typed your exact email address or ticket reference (e.g. SJ-7046).
                   </p>
                   <button
                     onClick={() => {
@@ -302,10 +310,12 @@ export default function MyTicketsModal({
                   {userBookings.map((b) => {
                     const ticketRef = getShortReference(b);
                     const isEftPending = b.paymentStatus === 'pending_eft';
+                    const isRaffleOnly = b.tableBookingOption === 'Raffle Tickets Only';
+                    const isDonationOnly = b.tableBookingOption === 'Direct Donation Only';
 
-                    // Build list of individual issued tickets
+                    // Build list of individual issued tickets (Seats only for dance bookings)
                     const seatItems = [];
-                    if (b.tableBookingOption !== 'Raffle Tickets Only') {
+                    if (!isRaffleOnly && !isDonationOnly && (Number(b.numTickets) || 0) > 0) {
                       const seatsCount = b.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(b.numTickets) || 1);
                       const allocatedSeats = (b.allocatedSeats && Array.isArray(b.allocatedSeats) && b.allocatedSeats.length > 0)
                         ? b.allocatedSeats
@@ -356,7 +366,11 @@ export default function MyTicketsModal({
                               </span>
                             </div>
                             <span className="text-[11px] text-slate-500 font-medium">
-                              {b.tableBookingOption === 'Raffle Tickets Only' ? '🎟️ Raffle Supporter Pass' : `Table #${b.tableNumber} • ${b.tableBookingOption}`}
+                              {isRaffleOnly 
+                                ? '🎟️ Charity Raffle Supporter Pass (No Seat)' 
+                                : isDonationOnly
+                                ? '💝 Direct Medical Donation (No Seat)'
+                                : `Table #${b.tableNumber} • ${b.tableBookingOption}`}
                             </span>
                           </div>
 

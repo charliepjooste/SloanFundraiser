@@ -111,6 +111,77 @@ export function getShortReference(booking) {
 }
 
 /**
+ * Universal search matcher for bookings and individual ticket pass references (e.g. SJ-7046-S8, SJ-7046-R1, names, email, phone)
+ */
+export function matchBookingSearch(booking, rawSearchTerm) {
+  if (!booking || !rawSearchTerm || !String(rawSearchTerm).trim()) return false;
+  const term = String(rawSearchTerm).trim().toLowerCase().replace(/^(ref:\s*|#)/, '').trim();
+  if (!term) return false;
+
+  const baseRef = (booking.ticketRef || getShortReference(booking) || '').toLowerCase();
+  const id = (booking.id || '').toLowerCase();
+
+  // Direct reference or ID match
+  if (baseRef && (baseRef === term || baseRef.includes(term) || term.includes(baseRef))) return true;
+  if (id && (id === term || id.includes(term) || term.includes(id))) return true;
+
+  // Individual seat pass references (e.g. SJ-7046-S8)
+  const isRaffleOnly = booking.tableBookingOption === 'Raffle Tickets Only';
+  const isDonationOnly = booking.tableBookingOption === 'Direct Donation Only';
+
+  if (!isRaffleOnly && !isDonationOnly) {
+    if (booking.allocatedSeats && Array.isArray(booking.allocatedSeats)) {
+      for (const s of booking.allocatedSeats) {
+        const passRef = `${baseRef}-s${s}`;
+        if (passRef === term || passRef.includes(term) || term.includes(passRef)) return true;
+        if (term === `s${s}` || term === `seat ${s}` || term === `seat #${s}`) return true;
+      }
+    }
+    const seatsCount = Number(booking.numTickets) || 0;
+    for (let s = 1; s <= seatsCount; s++) {
+      const passRef = `${baseRef}-s${s}`;
+      if (passRef === term || passRef.includes(term) || term.includes(passRef)) return true;
+    }
+  }
+
+  // Individual raffle pass references (e.g. SJ-7046-R1)
+  const raffleCount = Number(booking.raffleTicketsCount) || 0;
+  for (let r = 1; r <= raffleCount; r++) {
+    const passRef = `${baseRef}-r${r}`;
+    if (passRef === term || passRef.includes(term) || term.includes(passRef)) return true;
+    if (term === `r${r}` || term === `raffle ${r}` || term === `raffle #${r}`) return true;
+  }
+
+  // Names (Main guest, attendee list, raffle entrants)
+  const fullName = `${booking.firstName || ''} ${booking.surname || ''}`.toLowerCase();
+  if (fullName.includes(term)) return true;
+  if ((booking.firstName || '').toLowerCase().includes(term)) return true;
+  if ((booking.surname || '').toLowerCase().includes(term)) return true;
+
+  if (booking.guestNames && Array.isArray(booking.guestNames)) {
+    if (booking.guestNames.some(n => (n || '').toLowerCase().includes(term))) return true;
+  }
+
+  if (booking.raffleEntrants && Array.isArray(booking.raffleEntrants)) {
+    if (booking.raffleEntrants.some(e => (e?.name || '').toLowerCase().includes(term))) return true;
+  }
+
+  // Email & Phone Number
+  if ((booking.email || '').toLowerCase().includes(term)) return true;
+  if ((booking.mobileNumber || '').toLowerCase().includes(term)) return true;
+  const cleanPhone = (booking.mobileNumber || '').replace(/[^0-9]/g, '');
+  const cleanTerm = term.replace(/[^0-9]/g, '');
+  if (cleanTerm.length >= 4 && cleanPhone.includes(cleanTerm)) return true;
+
+  // Table number
+  if (!isRaffleOnly && !isDonationOnly && booking.tableNumber) {
+    if (term === `table ${booking.tableNumber}` || term === `table #${booking.tableNumber}` || term === `${booking.tableNumber}`) return true;
+  }
+
+  return false;
+}
+
+/**
  * Generate email notification for Admins when an EFT booking is submitted
  */
 export function generateAdminEftNotificationEmail(booking) {

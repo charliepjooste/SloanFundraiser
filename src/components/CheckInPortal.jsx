@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Search, CheckCircle2, UserCheck, Clock, Table, Phone, Mail, MessageCircle, Send, Ticket } from 'lucide-react';
-import { toggleGuestCheckIn, generateWhatsAppMessage, resendTicketEmail, getShortReference } from '../firebase';
+import { Search, CheckCircle2, UserCheck, Clock, Table, Phone, Mail, MessageCircle, Send, Ticket, Heart } from 'lucide-react';
+import { toggleGuestCheckIn, generateWhatsAppMessage, resendTicketEmail, getShortReference, matchBookingSearch } from '../firebase';
 
 export default function CheckInPortal({ bookings = [], onViewTicketPass }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -8,14 +8,7 @@ export default function CheckInPortal({ bookings = [], onViewTicketPass }) {
   const [toastMsg, setToastMsg] = useState('');
 
   const filteredBookings = bookings.filter((b) => {
-    const term = searchTerm.toLowerCase();
-    const shortRef = getShortReference(b).toLowerCase();
-    const nameMatch = `${b.firstName || ''} ${b.surname || ''}`.toLowerCase().includes(term);
-    const emailMatch = (b.email || '').toLowerCase().includes(term);
-    const phoneMatch = (b.mobileNumber || '').includes(term);
-    const tableMatch = String(b.tableNumber || '').includes(term);
-    const refMatch = shortRef.includes(term);
-    const matchesSearch = nameMatch || emailMatch || phoneMatch || tableMatch || refMatch;
+    const matchesSearch = !searchTerm.trim() || matchBookingSearch(b, searchTerm);
 
     if (filterStatus === 'checkedIn') return matchesSearch && b.checkedIn;
     if (filterStatus === 'pending') return matchesSearch && !b.checkedIn;
@@ -167,9 +160,26 @@ export default function CheckInPortal({ bookings = [], onViewTicketPass }) {
                     </div>
                   </td>
                   <td className="p-3.5">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold">
-                      <Table className="w-3.5 h-3.5 text-emerald-600" /> Table #{b.tableNumber}
-                    </span>
+                    {b.tableBookingOption === 'Raffle Tickets Only' ? (
+                      <span className="inline-block px-2.5 py-1 rounded-lg bg-purple-100 border border-purple-200 text-purple-900 font-bold text-xs">
+                        🎟️ Raffle Supporter (No Seat)
+                      </span>
+                    ) : b.tableBookingOption === 'Direct Donation Only' ? (
+                      <span className="inline-block px-2.5 py-1 rounded-lg bg-rose-100 border border-rose-200 text-rose-900 font-bold text-xs">
+                        💝 Direct Donation (No Seat)
+                      </span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold">
+                          <Table className="w-3.5 h-3.5 text-emerald-600" /> Table #{b.tableNumber}
+                        </span>
+                        {b.allocatedSeats && b.allocatedSeats.length > 0 && (
+                          <span className="block text-[10px] text-purple-900 font-bold">
+                            Seat(s) #{b.allocatedSeats.join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="p-3.5 font-black text-slate-900">
                     {b.numTickets} Seat(s) {b.raffleTicketsCount > 0 && `• ${b.raffleTicketsCount} Raffle`}

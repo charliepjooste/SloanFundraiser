@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Table, Users, ArrowRightLeft, UserPlus, Edit3, CheckCircle2, X, Search, Plus, Trash2, ShieldCheck } from 'lucide-react';
-import { moveBookingToTable, updateBookingGuestNames, createBookingInFirestore } from '../firebase';
+import { moveBookingToTable, updateBookingGuestNames, createBookingInFirestore, matchBookingSearch } from '../firebase';
 
 export default function SeatingArrangementTab({ 
   bookings = [], 
@@ -28,17 +28,13 @@ export default function SeatingArrangementTab({
   // 35 Tables Setup
   const tables = Array.from({ length: 35 }, (_, i) => {
     const tableNo = i + 1;
-    const tableBookings = bookings.filter(b => Number(b.tableNumber) === tableNo && b.tableBookingOption !== 'Raffle Tickets Only');
-    const seatsOccupied = tableBookings.reduce((sum, b) => sum + (Number(b.numTickets) || 1), 0);
-    const capacity = 10;
-    const remaining = Math.max(0, capacity - seatsOccupied);
-
+    const tableBookings = (bookings || []).filter(b => Number(b.tableNumber) === tableNo && b.tableBookingOption !== 'Raffle Tickets Only' && b.tableBookingOption !== 'Direct Donation Only');
+    const occupiedSeats = tableBookings.reduce((sum, b) => sum + (Number(b.numTickets) || 0), 0);
     return {
       tableNumber: tableNo,
-      capacity,
-      seatsOccupied,
-      remaining,
-      isFull: remaining === 0,
+      capacity: 10,
+      occupiedSeats: Math.min(10, occupiedSeats),
+      remainingSeats: Math.max(0, 10 - occupiedSeats),
       bookings: tableBookings
     };
   });
@@ -51,11 +47,8 @@ export default function SeatingArrangementTab({
     if (!searchTerm.trim()) return true;
 
     const term = searchTerm.toLowerCase();
-    const tableMatch = `table ${t.tableNumber}`.includes(term);
-    const guestMatch = (t.bookings || []).some(b => 
-      `${b?.firstName || ''} ${b?.surname || ''}`.toLowerCase().includes(term) ||
-      (b?.guestNames && Array.isArray(b.guestNames) && b.guestNames.some(name => typeof name === 'string' && name.toLowerCase().includes(term)))
-    );
+    const tableMatch = `table ${t.tableNumber}`.includes(term) || `table #${t.tableNumber}`.includes(term);
+    const guestMatch = (t.bookings || []).some(b => matchBookingSearch(b, searchTerm));
     return tableMatch || guestMatch;
   });
 

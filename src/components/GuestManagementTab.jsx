@@ -25,6 +25,7 @@ import {
   generateWhatsAppMessage, 
   generateTicketEmailBody,
   getShortReference,
+  matchBookingSearch,
   approveEftPayment,
   EVENT_DETAILS 
 } from '../firebase';
@@ -74,15 +75,9 @@ export default function GuestManagementTab({
     tableBookingOption: 'Standard Dance Ticket'
   });
 
-  // Filter bookings
+  // Filter bookings using universal search matcher
   const filteredBookings = bookings.filter((b) => {
-    const term = searchTerm.toLowerCase();
-    const nameMatch = `${b.firstName || ''} ${b.surname || ''}`.toLowerCase().includes(term);
-    const emailMatch = (b.email || '').toLowerCase().includes(term);
-    const phoneMatch = (b.mobileNumber || '').includes(term);
-    const tableMatch = `table ${b.tableNumber}`.toLowerCase().includes(term);
-    const raffleEntrantMatch = (b.raffleEntrants || []).some(r => r.name?.toLowerCase().includes(term));
-    const matchesSearch = nameMatch || emailMatch || phoneMatch || tableMatch || raffleEntrantMatch;
+    const matchesSearch = !searchTerm.trim() || matchBookingSearch(b, searchTerm);
 
     if (tableFilter !== 'all' && Number(b.tableNumber) !== Number(tableFilter)) return false;
     if (raffleFilter === 'hasRaffle' && (Number(b.raffleTicketsCount) || 0) === 0) return false;
@@ -396,16 +391,27 @@ export default function GuestManagementTab({
                     </div>
                   </td>
 
-                  {/* Table Allocation */}
+                  {/* Table & Seat Allocation */}
                   <td className="p-3.5">
                     {b.tableBookingOption === 'Raffle Tickets Only' ? (
                       <span className="inline-block px-2.5 py-1 rounded-lg bg-purple-100 border border-purple-200 text-purple-900 font-bold text-xs">
-                        🎟️ Raffle Supporter
+                        🎟️ Raffle Supporter (No Seat)
+                      </span>
+                    ) : b.tableBookingOption === 'Direct Donation Only' ? (
+                      <span className="inline-block px-2.5 py-1 rounded-lg bg-rose-100 border border-rose-200 text-rose-900 font-bold text-xs">
+                        💝 Direct Donation (No Seat)
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold text-xs">
-                        <Table className="w-3.5 h-3.5 text-emerald-600" /> Table #{b.tableNumber}
-                      </span>
+                      <div className="space-y-1">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold text-xs">
+                          <Table className="w-3.5 h-3.5 text-emerald-600" /> Table #{b.tableNumber}
+                        </span>
+                        {b.allocatedSeats && b.allocatedSeats.length > 0 && (
+                          <span className="block text-[10px] text-purple-900 font-bold">
+                            Seat(s) #{b.allocatedSeats.join(', ')}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </td>
 

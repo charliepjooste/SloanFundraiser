@@ -24,6 +24,7 @@ import {
   approveEftPayment, 
   createBookingInFirestore,
   deleteGuestRecord,
+  matchBookingSearch,
   EVENT_DETAILS 
 } from '../firebase';
 
@@ -77,11 +78,7 @@ export default function DonationsManagementTab({
   // Filtered List
   const filteredDonations = donationsList.filter(d => {
     const search = searchTerm.toLowerCase();
-    const nameMatch = `${d.firstName || ''} ${d.surname || ''}`.toLowerCase().includes(search);
-    const emailMatch = (d.email || '').toLowerCase().includes(search);
-    const refMatch = (getShortReference(d) || '').toLowerCase().includes(search);
-    const tributeMatch = (d.specialRequests || '').toLowerCase().includes(search);
-    const matchesSearch = nameMatch || emailMatch || refMatch || tributeMatch;
+    const matchesSearch = !searchTerm.trim() || matchBookingSearch(d, searchTerm) || (d.specialRequests || '').toLowerCase().includes(search);
 
     let matchesStatus = true;
     if (statusFilter === 'paid') matchesStatus = d.paymentStatus !== 'pending_eft';
