@@ -7,7 +7,7 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
     const tableNo = i + 1;
     const existingTable = tablesData.find(t => t.id === `table_${tableNo}` || Number(t.tableNumber) === tableNo);
     const capacity = existingTable?.capacity || 10;
-    const reserved = existingTable?.seatsReserved || (i === 0 ? 8 : i === 2 ? 10 : i === 4 ? 6 : i === 7 ? 10 : i === 12 ? 9 : i === 24 ? 10 : 2);
+    const reserved = existingTable?.seatsReserved || 0;
     const remaining = Math.max(0, capacity - reserved);
     const isFull = remaining === 0;
 
