@@ -150,8 +150,18 @@ export default function DonationsManagementTab({
   // Add Manual Donation Submit
   const handleAddManualDonationSubmit = async (e) => {
     e.preventDefault();
-    if (!donorFirstName.trim() || !donorAmount || Number(donorAmount) <= 0) {
-      alert("Please enter donor name and a valid donation amount.");
+    if (!donorFirstName.trim() || !donorSurname.trim()) {
+      alert("Please enter the donor's First Name and Surname.");
+      return;
+    }
+
+    if (!donorMobile.trim() && !donorEmail.trim()) {
+      alert("Please enter either a Mobile Number OR an Email Address for the donor (at least one is required).");
+      return;
+    }
+
+    if (!donorAmount || Number(donorAmount) <= 0) {
+      alert("Please enter a valid donation amount (greater than R0).");
       return;
     }
 
@@ -160,8 +170,8 @@ export default function DonationsManagementTab({
       const payload = {
         firstName: donorFirstName.trim(),
         surname: donorSurname.trim(),
-        mobileNumber: donorMobile.trim() || 'N/A',
-        email: (donorEmail || '').trim().toLowerCase() || 'donor@sloanfundraiser.co.za',
+        mobileNumber: donorMobile.trim() || '',
+        email: (donorEmail || '').trim().toLowerCase() || '',
         tableBookingOption: 'Direct Donation Only',
         numTickets: 0,
         raffleTicketsCount: 0,
@@ -170,16 +180,17 @@ export default function DonationsManagementTab({
         amount: Number(donorAmount),
         specialRequests: donorTribute.trim() ? `Direct Donation: "${donorTribute.trim()}"` : 'Direct Charity Donation for Sloan',
         paymentMethod: donorPaymentMethod,
-        paymentStatus: donorStatus
+        paymentStatus: donorStatus,
+        createdAt: new Date().toISOString()
       };
 
       const newRecord = await createBookingInFirestore(payload);
       if (onAddBooking) onAddBooking(newRecord);
 
-      setStatusMessage(`✅ Added manual donation of R${donorAmount} for ${donorFirstName} ${donorSurname}!`);
+      setStatusMessage(`✅ Added donation of R${donorAmount} for ${donorFirstName} ${donorSurname}!`);
       setTimeout(() => setStatusMessage(''), 4000);
 
-      // Reset
+      // Reset Form
       setDonorFirstName('');
       setDonorSurname('');
       setDonorMobile('');
@@ -550,9 +561,10 @@ export default function DonationsManagementTab({
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Donor Surname</label>
+                  <label className="block font-bold text-slate-700 mb-1">Donor Surname *</label>
                   <input
                     type="text"
+                    required
                     value={donorSurname}
                     onChange={(e) => setDonorSurname(e.target.value)}
                     placeholder="e.g. Miller"
@@ -561,26 +573,29 @@ export default function DonationsManagementTab({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Mobile / WhatsApp</label>
-                  <input
-                    type="tel"
-                    value={donorMobile}
-                    onChange={(e) => setDonorMobile(e.target.value)}
-                    placeholder="e.g. 082 123 4567"
-                    className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 text-xs font-semibold focus:outline-none focus:border-purple-600"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Email Address</label>
-                  <input
-                    type="email"
-                    value={donorEmail}
-                    onChange={(e) => setDonorEmail(e.target.value)}
-                    placeholder="e.g. donor@gmail.com"
-                    className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 text-xs font-semibold focus:outline-none focus:border-purple-600"
-                  />
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-purple-900 block">Contact Info (Cell Number OR Email - at least one required) *</span>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-0.5">Mobile / Cell Number</label>
+                    <input
+                      type="tel"
+                      value={donorMobile}
+                      onChange={(e) => setDonorMobile(e.target.value)}
+                      placeholder="e.g. 082 123 4567"
+                      className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 text-xs font-semibold focus:outline-none focus:border-purple-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-0.5">Email Address</label>
+                    <input
+                      type="email"
+                      value={donorEmail}
+                      onChange={(e) => setDonorEmail(e.target.value)}
+                      placeholder="e.g. donor@gmail.com"
+                      className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 text-xs font-semibold focus:outline-none focus:border-purple-600"
+                    />
+                  </div>
                 </div>
               </div>
 

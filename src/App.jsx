@@ -50,9 +50,10 @@ import GeminiConcierge from './components/GeminiConcierge';
 import RaffleWheelModal from './components/RaffleWheelModal';
 import MyTicketsModal from './components/MyTicketsModal';
 import AdminLoginModal from './components/AdminLoginModal';
+import DonationsManagementTab from './components/DonationsManagementTab';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'seating', 'guests', 'checkin', 'wall'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'seating', 'guests', 'donations', 'checkin', 'wall'
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [bookingDefaultOption, setBookingDefaultOption] = useState('Standard Dance Ticket');
   const [isRaffleWheelOpen, setIsRaffleWheelOpen] = useState(false);
@@ -312,6 +313,12 @@ export default function App() {
                   Guest & Ticket Manager
                 </button>
                 <button
+                  onClick={() => setActiveTab('donations')}
+                  className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'donations' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
+                >
+                  💝 Donations
+                </button>
+                <button
                   onClick={() => setActiveTab('checkin')}
                   className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'checkin' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
                 >
@@ -400,6 +407,7 @@ export default function App() {
           <>
             <button onClick={() => setActiveTab('seating')} className={activeTab === 'seating' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>35 Tables</button>
             <button onClick={() => setActiveTab('guests')} className={activeTab === 'guests' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Guests</button>
+            <button onClick={() => setActiveTab('donations')} className={activeTab === 'donations' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Donations</button>
             <button onClick={() => setActiveTab('checkin')} className={activeTab === 'checkin' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Check-In</button>
             <button onClick={() => setIsRaffleWheelOpen(true)} className="text-purple-900 font-black flex items-center gap-1">
               <Gift className="w-3.5 h-3.5 text-emerald-600" /> Wheel
@@ -955,7 +963,17 @@ export default function App() {
           />
         )}
 
-        {/* TAB 4: DOOR CHECK-IN DESK (Admin Only) */}
+        {/* TAB 4: DONATIONS MANAGER (Admin Only) */}
+        {activeTab === 'donations' && isAdmin && (
+          <DonationsManagementTab 
+            bookings={bookings}
+            onUpdateBooking={handleUpdateBooking}
+            onAddBooking={handleAddBooking}
+            onDeleteBooking={handleDeleteBooking}
+          />
+        )}
+
+        {/* TAB 5: DOOR CHECK-IN DESK (Admin Only) */}
         {activeTab === 'checkin' && isAdmin && (
           <CheckInPortal 
             bookings={bookings} 
