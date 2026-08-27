@@ -397,11 +397,25 @@ export default function GuestManagementTab({
                 <tr key={b.id} className="hover:bg-emerald-50/40 transition">
                   {/* Guest Name & Contact */}
                   <td className="p-3.5">
-                    <div className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+                    <div className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
                       {b.firstName} {b.surname}
-                      {b.checkedIn && (
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-300">Checked In</span>
-                      )}
+                      {(() => {
+                        const seats = getBookingSeatCount(b);
+                        const checkedInSeatsCount = Array.isArray(b.checkedInSeats)
+                          ? b.checkedInSeats.length
+                          : (b.checkedIn ? seats : 0);
+
+                        if (checkedInSeatsCount >= seats && seats > 0) {
+                          return <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-300">✓ Checked In</span>;
+                        }
+                        if (checkedInSeatsCount > 0 && seats > 0) {
+                          return <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold border border-amber-300">{checkedInSeatsCount}/{seats} Checked In</span>;
+                        }
+                        if (b.checkedIn) {
+                          return <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-300">✓ Checked In</span>;
+                        }
+                        return null;
+                      })()}
                     </div>
                     <div className="flex items-center gap-1.5 text-[11px] text-purple-950 font-bold mt-0.5">
                       <span className="font-mono bg-purple-100 px-2 py-0.5 rounded text-xs border border-purple-200">

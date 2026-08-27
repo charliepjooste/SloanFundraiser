@@ -188,6 +188,8 @@ export function matchBookingSearch(booking, rawSearchTerm) {
   if (cleanTerm.length >= 4 && cleanPhone.includes(cleanTerm)) return true;
 
   // Table number
+  const isRaffleOnly = booking.tableBookingOption === 'Raffle Tickets Only';
+  const isDonationOnly = booking.tableBookingOption === 'Direct Donation Only';
   if (!isRaffleOnly && !isDonationOnly && booking.tableNumber) {
     if (term === `table ${booking.tableNumber}` || term === `table #${booking.tableNumber}` || term === `${booking.tableNumber}`) return true;
   }
@@ -865,13 +867,99 @@ export function subscribeTables(callback) {
 }
 
 /**
- * Toggle Check-in status
+ * Toggle Check-in status for an entire booking
  */
 export async function toggleGuestCheckIn(bookingId, currentCheckedInState) {
   const bookingRef = doc(db, 'bookings', bookingId);
   const nextState = !currentCheckedInState;
-  await updateDoc(bookingRef, {
+  const updatePayload = {
     checkedIn: nextState,
     checkedInAt: nextState ? new Date().toISOString() : null
-  });
+  };
+  await updateDoc(bookingRef, updatePayload);
+
+  try {
+    const cached = localStorage.getItem('sloan_cached_bookings');
+    if (cached) {
+      const list = JSON.parse(cached);
+      const updated = list.map(b => b.id === bookingId ? { ...b, ...updatePayload } : b);
+      localStorage.setItem('sloan_cached_bookings', JSON.stringify(updated));
+    }
+  } catch (e) {}
+}
+
+/**
+ * Toggle individual seat check-in status for multi-ticket bookings
+ */
+export async function toggleSeatCheckIn(bookingId, seatNumber, currentCheckedInState, booking) {
+  const bookingRef = doc(db, 'bookings', bookingId);
+  const seatsCount = getBookingSeatCount(booking);
+  
+  // Calculate existing checked-in seats
+  let currentCheckedInSeats = [];
+  if (Array.isArray(booking.checkedInSeats)) {
+    currentCheckedInSeats = [...booking.checkedInSeats];
+  } else if (booking.checkedIn) {
+    const allocatedSeats = (booking.allocatedSeats && Array.isArray(booking.allocatedSeats) && booking.allocatedSeats.length > 0)
+      ? booking.allocatedSeats
+      : Array.from({ length: seatsCount || 1 }, (_, i) => i + 1);
+    currentCheckedInSeats = [...allocatedSeats];
+  }
+
+  let updatedCheckedInSeats;
+  if (currentCheckedInState) {
+    // Uncheck this seat
+    updatedCheckedInSeats = currentCheckedInSeats.filter(s => Number(s) !== Number(seatNumber));
+  } else {
+    // Check in this seat
+    updatedCheckedInSeats = Array.from(new Set([...currentCheckedInSeats, Number(seatNumber)]));
+  }
+
+  const isAllCheckedIn = seatsCount > 0 && updatedCheckedInSeats.length >= seatsCount;
+
+  const updatePayload = {
+    checkedInSeats: updatedCheckedInSeats,
+    checkedIn: isAllCheckedIn,
+    checkedInAt: updatedCheckedInSeats.length > 0 ? (booking.checkedInAt || new Date().toISOString()) : null
+  };
+
+  await updateDoc(bookingRef, updatePayload);
+
+  try {
+    const cached = localStorage.getItem('sloan_cached_bookings');
+    if (cached) {
+      const list = JSON.parse(cached);
+      const updated = list.map(b => b.id === bookingId ? { ...b, ...updatePayload } : b);
+      localStorage.setItem('sloan_cached_bookings', JSON.stringify(updated));
+    }
+  } catch (e) {}
+}
+
+/**
+ * Check-in or uncheck-in all seats in a booking in one click
+ */
+export async function toggleAllSeatsCheckIn(bookingId, checkInAll, booking) {
+  const bookingRef = doc(db, 'bookings', bookingId);
+  const seatsCount = getBookingSeatCount(booking);
+  const allocatedSeats = (booking.allocatedSeats && Array.isArray(booking.allocatedSeats) && booking.allocatedSeats.length > 0)
+    ? booking.allocatedSeats
+    : Array.from({ length: seatsCount || 1 }, (_, i) => i + 1);
+
+  const updatedCheckedInSeats = checkInAll ? [...allocatedSeats] : [];
+  const updatePayload = {
+    checkedInSeats: updatedCheckedInSeats,
+    checkedIn: checkInAll,
+    checkedInAt: checkInAll ? new Date().toISOString() : null
+  };
+
+  await updateDoc(bookingRef, updatePayload);
+
+  try {
+    const cached = localStorage.getItem('sloan_cached_bookings');
+    if (cached) {
+      const list = JSON.parse(cached);
+      const updated = list.map(b => b.id === bookingId ? { ...b, ...updatePayload } : b);
+      localStorage.setItem('sloan_cached_bookings', JSON.stringify(updated));
+    }
+  } catch (e) {}
 }

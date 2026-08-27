@@ -385,11 +385,35 @@ export default function MyTicketsModal({
                                 R{b.amount} Paid
                               </span>
                             )}
-                            {b.checkedIn && (
-                              <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-[10px]">
-                                Checked In
-                              </span>
-                            )}
+                            {(() => {
+                              const seats = getBookingSeatCount(b);
+                              const checkedInSeatsCount = Array.isArray(b.checkedInSeats)
+                                ? b.checkedInSeats.length
+                                : (b.checkedIn ? seats : 0);
+
+                              if (checkedInSeatsCount >= seats && seats > 0) {
+                                return (
+                                  <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-[10px]">
+                                    ✓ Checked In
+                                  </span>
+                                );
+                              }
+                              if (checkedInSeatsCount > 0 && seats > 0) {
+                                return (
+                                  <span className="px-2.5 py-1 rounded-full bg-amber-600 text-white font-black text-[10px]">
+                                    {checkedInSeatsCount}/{seats} Checked In
+                                  </span>
+                                );
+                              }
+                              if (b.checkedIn) {
+                                return (
+                                  <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-[10px]">
+                                    ✓ Checked In
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                         </div>
 
@@ -442,24 +466,35 @@ export default function MyTicketsModal({
                             <div className="space-y-1">
                               <span className="text-[10px] uppercase font-bold text-slate-400">Dance Admission Passes:</span>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                                {seatItems.map((st) => (
-                                  <div key={st.passRef} className="p-2 rounded-xl bg-white border border-purple-100 flex items-center justify-between gap-1 shadow-2xs">
-                                    <div className="truncate">
-                                      <span className="font-mono text-[10px] font-black text-purple-900 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 mr-1.5">
-                                        {st.passRef}
-                                      </span>
-                                      <span className="font-semibold text-slate-800 text-[11px] truncate">{st.attendeeName}</span>
+                                {seatItems.map((st) => {
+                                  const isSeatCheckedIn = Array.isArray(b.checkedInSeats)
+                                    ? b.checkedInSeats.map(Number).includes(Number(st.seatNumber))
+                                    : Boolean(b.checkedIn);
+
+                                  return (
+                                    <div key={st.passRef} className="p-2 rounded-xl bg-white border border-purple-100 flex items-center justify-between gap-1 shadow-2xs">
+                                      <div className="truncate flex items-center gap-1">
+                                        <span className="font-mono text-[10px] font-black text-purple-900 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 shrink-0">
+                                          {st.passRef}
+                                        </span>
+                                        <span className="font-semibold text-slate-800 text-[11px] truncate">{st.attendeeName}</span>
+                                        {isSeatCheckedIn && (
+                                          <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200 shrink-0">
+                                            ✓ In
+                                          </span>
+                                        )}
+                                      </div>
+                                      <button
+                                        onClick={() => handleDownloadSinglePdf(b, st)}
+                                        disabled={downloadingId === `${b.id}-${st.passRef}`}
+                                        className="p-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0 transition"
+                                        title="Download PDF for this seat pass"
+                                      >
+                                        PDF ↓
+                                      </button>
                                     </div>
-                                    <button
-                                      onClick={() => handleDownloadSinglePdf(b, st)}
-                                      disabled={downloadingId === `${b.id}-${st.passRef}`}
-                                      className="p-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0 transition"
-                                      title="Download PDF for this seat pass"
-                                    >
-                                      PDF ↓
-                                    </button>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
