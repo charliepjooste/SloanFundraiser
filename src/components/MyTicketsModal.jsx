@@ -26,6 +26,7 @@ import {
 import { 
   EVENT_DETAILS, 
   getShortReference, 
+  getBookingSeatCount,
   generateWhatsAppMessage, 
   generateTicketEmailBody,
   updateGuestRecord,
@@ -87,7 +88,7 @@ export default function MyTicketsModal({
   };
 
   const handleOpenEditNames = (booking) => {
-    const seatsCount = Number(booking.numTickets) || (booking.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : 1);
+    const seatsCount = getBookingSeatCount(booking) || 1;
     let names = booking.guestNames ? [...booking.guestNames] : [];
     
     while (names.length < seatsCount) {
@@ -315,8 +316,8 @@ export default function MyTicketsModal({
 
                     // Build list of individual issued tickets (Seats only for dance bookings)
                     const seatItems = [];
-                    if (!isRaffleOnly && !isDonationOnly && (Number(b.numTickets) || 0) > 0) {
-                      const seatsCount = b.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(b.numTickets) || 1);
+                    const seatsCount = getBookingSeatCount(b);
+                    if (seatsCount > 0) {
                       const allocatedSeats = (b.allocatedSeats && Array.isArray(b.allocatedSeats) && b.allocatedSeats.length > 0)
                         ? b.allocatedSeats
                         : Array.from({ length: seatsCount }, (_, i) => i + 1);

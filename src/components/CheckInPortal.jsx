@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, CheckCircle2, UserCheck, Clock, Table, Phone, Mail, MessageCircle, Send, Ticket, Heart } from 'lucide-react';
-import { toggleGuestCheckIn, generateWhatsAppMessage, resendTicketEmail, getShortReference, matchBookingSearch } from '../firebase';
+import { toggleGuestCheckIn, generateWhatsAppMessage, resendTicketEmail, getShortReference, matchBookingSearch, getBookingSeatCount } from '../firebase';
 
 export default function CheckInPortal({ bookings = [], onViewTicketPass }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,8 +15,8 @@ export default function CheckInPortal({ bookings = [], onViewTicketPass }) {
     return matchesSearch;
   });
 
-  const totalGuests = bookings.reduce((sum, b) => sum + (Number(b.numTickets) || 1), 0);
-  const checkedInCount = bookings.reduce((sum, b) => b.checkedIn ? sum + (Number(b.numTickets) || 1) : sum, 0);
+  const totalGuests = bookings.reduce((sum, b) => sum + getBookingSeatCount(b), 0);
+  const checkedInCount = bookings.reduce((sum, b) => b.checkedIn ? sum + getBookingSeatCount(b) : sum, 0);
   const percentCheckedIn = totalGuests > 0 ? Math.round((checkedInCount / totalGuests) * 100) : 0;
 
   const handleCheckInToggle = async (bookingId, currentState) => {
@@ -182,7 +182,17 @@ export default function CheckInPortal({ bookings = [], onViewTicketPass }) {
                     )}
                   </td>
                   <td className="p-3.5 font-black text-slate-900">
-                    {b.numTickets} Seat(s) {b.raffleTicketsCount > 0 && `• ${b.raffleTicketsCount} Raffle`}
+                    {(() => {
+                      const seats = getBookingSeatCount(b);
+                      return (
+                        <span>
+                          {seats > 0 
+                            ? (b.tableBookingOption === 'Full Private Table (10 Guests)' ? '👑 10 Seats (Full Table)' : `${seats} Seat${seats > 1 ? 's' : ''}`)
+                            : <span className="text-slate-400 font-normal italic">0 (No Seat)</span>}
+                          {b.raffleTicketsCount > 0 && ` • ${b.raffleTicketsCount} Raffle`}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="p-3.5">
                     <span className="inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">

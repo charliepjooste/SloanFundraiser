@@ -27,6 +27,7 @@ import {
   getShortReference,
   matchBookingSearch,
   approveEftPayment,
+  getBookingSeatCount,
   EVENT_DETAILS 
 } from '../firebase';
 
@@ -90,12 +91,10 @@ export default function GuestManagementTab({
   const tables = Array.from({ length: 35 }, (_, i) => {
     const tableNo = i + 1;
     const tableBookings = (bookings || []).filter(
-      b => Number(b.tableNumber) === tableNo && 
-      b.tableBookingOption !== 'Raffle Tickets Only' && 
-      b.tableBookingOption !== 'Direct Donation Only'
+      b => Number(b.tableNumber) === tableNo && getBookingSeatCount(b) > 0
     );
     const occupiedSeats = tableBookings.reduce(
-      (sum, b) => sum + (b.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(b.numTickets) || 1)), 
+      (sum, b) => sum + getBookingSeatCount(b), 
       0
     );
     const capacity = 10;
@@ -113,7 +112,7 @@ export default function GuestManagementTab({
   });
 
   // Calculate summary stats
-  const totalGuests = bookings.reduce((sum, b) => sum + (Number(b.numTickets) || 0), 0);
+  const totalGuests = bookings.reduce((sum, b) => sum + getBookingSeatCount(b), 0);
   const totalRaffleTicketsBought = bookings.reduce((sum, b) => sum + (Number(b.raffleTicketsCount) || 0), 0);
   const totalBookingsCount = bookings.length;
 
@@ -288,7 +287,7 @@ export default function GuestManagementTab({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 rounded-3xl bg-white border border-purple-200 shadow-sm">
           <div className="flex justify-between items-center text-xs font-bold text-purple-900">
-            <span>Total Attendees</span>
+            <span>Total Seated Attendees</span>
             <Users className="w-5 h-5 text-emerald-600" />
           </div>
           <p className="text-3xl font-black text-slate-900 mt-1">{totalGuests} Guests</p>
@@ -460,11 +459,14 @@ export default function GuestManagementTab({
 
                   {/* Dance Tickets */}
                   <td className="p-3.5 font-black text-slate-900 text-xs">
-                    {b.numTickets > 0 ? (
-                      <span>{b.numTickets} Seat{b.numTickets > 1 ? 's' : ''}</span>
-                    ) : (
-                      <span className="text-slate-400 italic">None</span>
-                    )}
+                    {(() => {
+                      const seats = getBookingSeatCount(b);
+                      if (seats === 0) return <span className="text-slate-400 font-normal italic">0 (No Seat)</span>;
+                      if (b.tableBookingOption === 'Full Private Table (10 Guests)') {
+                        return <span className="text-emerald-800 font-black">👑 10 Seats (Full Table)</span>;
+                      }
+                      return <span>{seats} Seat{seats > 1 ? 's' : ''}</span>;
+                    })()}
                   </td>
 
                   {/* Raffle Tickets & Entrants */}

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { 
   getShortReference, 
+  getBookingSeatCount,
   approveEftPayment, 
   createBookingInFirestore,
   deleteGuestRecord,
@@ -441,7 +442,7 @@ export default function DonationsManagementTab({
                               Table #{d.tableNumber || 1}
                             </span>
                             <span className="text-[10px] text-slate-500 font-semibold">
-                              {d.numTickets || 1} Ticket(s) • R{d.amount} Total
+                              {d.tableBookingOption === 'Full Private Table (10 Guests)' ? '👑 10 Seats (Full Table)' : `${getBookingSeatCount(d)} Ticket(s)`} • R{d.amount} Total
                             </span>
                           </div>
                         )}

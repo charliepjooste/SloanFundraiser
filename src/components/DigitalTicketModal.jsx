@@ -22,6 +22,7 @@ import {
 import { 
   EVENT_DETAILS, 
   getShortReference, 
+  getBookingSeatCount,
   generateWhatsAppMessage, 
   generateTicketEmailBody, 
   generateHtmlTicketEmail,
@@ -46,8 +47,8 @@ export default function DigitalTicketModal({ booking, onClose }) {
   const isDonationOnly = booking.tableBookingOption === 'Direct Donation Only';
 
   // 1. Dance Seat Passes (Only for dance tickets)
-  if (!isRaffleOnly && !isDonationOnly && (Number(booking.numTickets) || 0) > 0) {
-    const seatsCount = booking.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(booking.numTickets) || 1);
+  const seatsCount = getBookingSeatCount(booking);
+  if (seatsCount > 0) {
     const allocatedSeats = (booking.allocatedSeats && Array.isArray(booking.allocatedSeats) && booking.allocatedSeats.length > 0)
       ? booking.allocatedSeats
       : Array.from({ length: seatsCount }, (_, i) => i + 1);

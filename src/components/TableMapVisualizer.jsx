@@ -1,5 +1,6 @@
 import React from 'react';
 import { Users, CheckCircle2, AlertCircle } from 'lucide-react';
+import { getBookingSeatCount } from '../firebase';
 
 export default function TableMapVisualizer({ selectedTableNumber, onSelectTable, tablesData = [], bookings = [] }) {
   // Generate 35 Tables (each capacity 10 = 350 Total Capacity)
@@ -8,12 +9,10 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
     
     // Check bookings first for accurate real-time count
     const tableBookings = (bookings || []).filter(
-      b => Number(b.tableNumber) === tableNo && 
-      b.tableBookingOption !== 'Raffle Tickets Only' && 
-      b.tableBookingOption !== 'Direct Donation Only'
+      b => Number(b.tableNumber) === tableNo && getBookingSeatCount(b) > 0
     );
     const bookingsSeats = tableBookings.reduce(
-      (sum, b) => sum + (b.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(b.numTickets) || 1)), 
+      (sum, b) => sum + getBookingSeatCount(b), 
       0
     );
 

@@ -26,6 +26,7 @@ import {
   createBookingInFirestore, 
   EVENT_DETAILS, 
   getShortReference, 
+  getBookingSeatCount,
   generateWhatsAppMessage, 
   openGmailCompose 
 } from '../firebase';
@@ -72,8 +73,8 @@ export default function BookingWizard({
   const tableOccupancy = {};
   for (let i = 1; i <= 35; i++) tableOccupancy[i] = 0;
   (bookings || []).forEach(b => {
-    if (b.tableNumber && b.tableNumber >= 1 && b.tableNumber <= 35 && b.tableBookingOption !== 'Raffle Tickets Only') {
-      tableOccupancy[b.tableNumber] = (tableOccupancy[b.tableNumber] || 0) + (Number(b.numTickets) || 1);
+    if (b.tableNumber && b.tableNumber >= 1 && b.tableNumber <= 35) {
+      tableOccupancy[b.tableNumber] = (tableOccupancy[b.tableNumber] || 0) + getBookingSeatCount(b);
     }
   });
 
@@ -246,7 +247,7 @@ export default function BookingWizard({
         finalAllocatedSeats = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
       } else if (tableBookingOption === 'Standard Dance Ticket') {
         const requestedTickets = Number(numTickets) || 1;
-        const existingTableBookings = (bookings || []).filter(b => Number(b.tableNumber) === Number(finalTableNumber) && b.tableBookingOption !== 'Raffle Tickets Only');
+        const existingTableBookings = (bookings || []).filter(b => Number(b.tableNumber) === Number(finalTableNumber) && getBookingSeatCount(b) > 0);
         
         // Find which seats (1..10) are already claimed at finalTableNumber
         const claimedSeats = new Set();
@@ -254,7 +255,7 @@ export default function BookingWizard({
           if (b.allocatedSeats && Array.isArray(b.allocatedSeats) && b.allocatedSeats.length > 0) {
             b.allocatedSeats.forEach(s => claimedSeats.add(Number(s)));
           } else {
-            const count = Number(b.numTickets) || 1;
+            const count = getBookingSeatCount(b);
             for (let i = 1; i <= count; i++) claimedSeats.add(i);
           }
         });

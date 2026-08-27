@@ -35,6 +35,7 @@ import {
   subscribeTables, 
   EVENT_DETAILS, 
   getShortReference,
+  getBookingSeatCount,
   generateWhatsAppMessage,
   openGmailCompose,
   deleteGuestRecord,
@@ -115,15 +116,15 @@ export default function App() {
   const totalAmountRaised = bookings.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
   const targetGoal = 75000;
   const progressPercent = Math.min(100, Math.round((totalAmountRaised / targetGoal) * 100));
-  const totalTicketsSold = bookings.reduce((sum, b) => sum + (Number(b.numTickets) || 0), 0);
+  const totalTicketsSold = bookings.reduce((sum, b) => sum + getBookingSeatCount(b), 0);
   const totalRaffleTicketsSold = bookings.reduce((sum, b) => sum + (Number(b.raffleTicketsCount) || 0), 0);
 
   // Dynamic table occupancy calculation across 35 tables (10 capacity each = 350 seats)
   const tableOccupancyMap = {};
   for (let i = 1; i <= 35; i++) tableOccupancyMap[i] = 0;
   bookings.forEach(b => {
-    if (b.tableNumber && b.tableNumber >= 1 && b.tableNumber <= 35 && b.tableBookingOption !== 'Raffle Tickets Only') {
-      tableOccupancyMap[b.tableNumber] = (tableOccupancyMap[b.tableNumber] || 0) + (Number(b.numTickets) || 1);
+    if (b.tableNumber && b.tableNumber >= 1 && b.tableNumber <= 35) {
+      tableOccupancyMap[b.tableNumber] = (tableOccupancyMap[b.tableNumber] || 0) + getBookingSeatCount(b);
     }
   });
   const fullTablesCount = Object.values(tableOccupancyMap).filter(seats => seats >= 10).length;
@@ -1035,7 +1036,7 @@ export default function App() {
                     </p>
 
                     <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100">
-                      <span>{b.numTickets || 1} Seat(s) Reserved</span>
+                      <span>{getBookingSeatCount(b) > 0 ? `${getBookingSeatCount(b)} Seat(s) Reserved` : 'Supporter Pass'}</span>
                       <span>{b.createdAt ? (typeof b.createdAt === 'string' ? b.createdAt.slice(0, 10) : '2026-10-09') : '2026-10-09'}</span>
                     </div>
                   </div>

@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { EVENT_DETAILS, getShortReference } from '../firebase';
+import { EVENT_DETAILS, getShortReference, getBookingSeatCount } from '../firebase';
 
 /**
  * Renders a single ticket pass onto the PDF document
@@ -262,11 +262,8 @@ export async function downloadTicketPdf(booking, specificItem = null) {
     items = [specificItem];
   } else {
     // 1. Dance Seat Passes (Only for dance tickets)
-    const isRaffleOnly = booking.tableBookingOption === 'Raffle Tickets Only';
-    const isDonationOnly = booking.tableBookingOption === 'Direct Donation Only';
-
-    if (!isRaffleOnly && !isDonationOnly && (Number(booking.numTickets) || 0) > 0) {
-      const seatsCount = booking.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(booking.numTickets) || 1);
+    const seatsCount = getBookingSeatCount(booking);
+    if (seatsCount > 0) {
       const allocatedSeats = (booking.allocatedSeats && Array.isArray(booking.allocatedSeats) && booking.allocatedSeats.length > 0)
         ? booking.allocatedSeats
         : Array.from({ length: seatsCount }, (_, i) => i + 1);

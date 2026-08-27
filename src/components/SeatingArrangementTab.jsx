@@ -14,7 +14,7 @@ import {
   AlertCircle,
   LayoutGrid
 } from 'lucide-react';
-import { moveBookingToTable, updateBookingGuestNames, createBookingInFirestore, matchBookingSearch } from '../firebase';
+import { moveBookingToTable, updateBookingGuestNames, createBookingInFirestore, matchBookingSearch, getBookingSeatCount } from '../firebase';
 import TableMapVisualizer from './TableMapVisualizer';
 
 export default function SeatingArrangementTab({ 
@@ -45,12 +45,10 @@ export default function SeatingArrangementTab({
   const tables = Array.from({ length: 35 }, (_, i) => {
     const tableNo = i + 1;
     const tableBookings = (bookings || []).filter(
-      b => Number(b.tableNumber) === tableNo && 
-      b.tableBookingOption !== 'Raffle Tickets Only' && 
-      b.tableBookingOption !== 'Direct Donation Only'
+      b => Number(b.tableNumber) === tableNo && getBookingSeatCount(b) > 0
     );
     const occupiedSeats = tableBookings.reduce(
-      (sum, b) => sum + (b.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(b.numTickets) || 1)), 
+      (sum, b) => sum + getBookingSeatCount(b), 
       0
     );
     const capacity = 10;
@@ -104,7 +102,7 @@ export default function SeatingArrangementTab({
         movingBooking.booking.id,
         Number(movingBooking.targetTable),
         Number(movingBooking.booking.tableNumber),
-        Number(movingBooking.booking.numTickets) || 1
+        getBookingSeatCount(movingBooking.booking)
       );
     } catch (err) {
       console.error("Failed to move booking:", err);
@@ -362,7 +360,7 @@ export default function SeatingArrangementTab({
                             {b.firstName} {b.surname}
                           </span>
                           <span className="text-[10px] text-emerald-700 font-bold">
-                            {b.tableBookingOption === 'Full Private Table (10 Guests)' ? '👑 Full Table (10 Seats)' : `${b.numTickets} Ticket(s)`}
+                            {b.tableBookingOption === 'Full Private Table (10 Guests)' ? '👑 Full Table (10 Seats)' : `${getBookingSeatCount(b)} Seat${getBookingSeatCount(b) > 1 ? 's' : ''}`}
                             {b.allocatedSeats && b.allocatedSeats.length > 0 && ` • Seat(s) #${b.allocatedSeats.join(', ')}`}
                           </span>
                         </div>
@@ -388,14 +386,18 @@ export default function SeatingArrangementTab({
                       {/* Manage Table Guests Action */}
                       <button
                         onClick={() => {
+                          const seatsCount = getBookingSeatCount(b) || 1;
                           const existingNames = b.guestNames && b.guestNames.length > 0
                             ? [...b.guestNames]
-                            : Array.from({ length: Number(b.numTickets) || 1 }, (_, idx) => idx === 0 ? `${b.firstName} ${b.surname}` : '');
-                          setEditingTableGuestsBooking({ ...b, guestNames: existingNames });
+                            : Array.from({ length: seatsCount }, (_, idx) => idx === 0 ? `${b.firstName} ${b.surname}` : '');
+                          while (existingNames.length < seatsCount) {
+                            existingNames.push('');
+                          }
+                          setEditingTableGuestsBooking({ ...b, guestNames: existingNames, effectiveSeats: seatsCount });
                         }}
                         className="w-full mt-1 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[10px] font-bold text-emerald-800 flex items-center justify-center gap-1 transition cursor-pointer"
                       >
-                        <Edit3 className="w-3 h-3" /> Edit Individual Names ({b.guestNames?.length || b.numTickets})
+                        <Edit3 className="w-3 h-3" /> Edit Individual Names ({getBookingSeatCount(b)} Seats)
                       </button>
                     </div>
                   ))
@@ -434,7 +436,7 @@ export default function SeatingArrangementTab({
             <div className="text-xs space-y-3 text-slate-600">
               <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200">
                 <p>
-                  Moving <strong className="text-slate-900">{movingBooking.booking.firstName} {movingBooking.booking.surname}</strong> ({movingBooking.booking.numTickets || 1} seat(s)) from <strong className="text-purple-950 font-black">Table #{movingBooking.booking.tableNumber}</strong>.
+                  Moving <strong className="text-slate-900">{movingBooking.booking.firstName} {movingBooking.booking.surname}</strong> ({getBookingSeatCount(movingBooking.booking)} seat(s)) from <strong className="text-purple-950 font-black">Table #{movingBooking.booking.tableNumber}</strong>.
                 </p>
               </div>
 
@@ -447,7 +449,7 @@ export default function SeatingArrangementTab({
                 >
                   {tables.map((t) => {
                     const isCurrent = t.tableNumber === movingBooking.booking.tableNumber;
-                    const needed = Number(movingBooking.booking.numTickets) || 1;
+                    const needed = getBookingSeatCount(movingBooking.booking);
                     const canFit = t.remainingSeats >= needed || isCurrent;
 
                     return (
@@ -466,7 +468,7 @@ export default function SeatingArrangementTab({
               {/* Destination Table Live Status Preview */}
               {(() => {
                 const targetObj = tables.find(t => t.tableNumber === Number(movingBooking.targetTable));
-                const needed = Number(movingBooking.booking.numTickets) || 1;
+                const needed = getBookingSeatCount(movingBooking.booking);
                 const isCurrent = Number(movingBooking.targetTable) === Number(movingBooking.booking.tableNumber);
 
                 if (!targetObj) return null;
@@ -515,7 +517,7 @@ export default function SeatingArrangementTab({
                 onClick={handleConfirmMove}
                 disabled={(() => {
                   const targetObj = tables.find(t => t.tableNumber === Number(movingBooking.targetTable));
-                  const needed = Number(movingBooking.booking.numTickets) || 1;
+                  const needed = getBookingSeatCount(movingBooking.booking);
                   const isCurrent = Number(movingBooking.targetTable) === Number(movingBooking.booking.tableNumber);
                   return !isCurrent && targetObj && targetObj.remainingSeats < needed;
                 })()}
@@ -555,7 +557,7 @@ export default function SeatingArrangementTab({
                 Enter the names of everyone sitting at this table:
               </p>
 
-              {Array.from({ length: Number(editingTableGuestsBooking.numTickets) || 10 }).map((_, index) => (
+              {Array.from({ length: editingTableGuestsBooking.effectiveSeats || getBookingSeatCount(editingTableGuestsBooking) || 1 }).map((_, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <span className="w-16 font-mono text-[10px] text-purple-900 font-bold shrink-0">Seat #{index + 1}:</span>
                   <input

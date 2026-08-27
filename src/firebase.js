@@ -111,6 +111,23 @@ export function getShortReference(booking) {
 }
 
 /**
+ * Universal helper to calculate the exact number of seated attendees / dance tickets for any booking.
+ * Excludes non-seated booking types (Raffle Tickets Only: 0, Direct Donation Only: 0).
+ * Private tables always have 10 seats.
+ * Standard dance tickets have their booked seat count (Number(booking.numTickets) || 0).
+ */
+export function getBookingSeatCount(booking) {
+  if (!booking) return 0;
+  if (booking.tableBookingOption === 'Raffle Tickets Only' || booking.tableBookingOption === 'Direct Donation Only') {
+    return 0;
+  }
+  if (booking.tableBookingOption === 'Full Private Table (10 Guests)') {
+    return 10;
+  }
+  return Math.max(0, Number(booking.numTickets) || 0);
+}
+
+/**
  * Universal search matcher for bookings and individual ticket pass references (e.g. SJ-7046-S8, SJ-7046-R1, names, email, phone)
  */
 export function matchBookingSearch(booking, rawSearchTerm) {
@@ -126,10 +143,8 @@ export function matchBookingSearch(booking, rawSearchTerm) {
   if (id && (id === term || id.includes(term) || term.includes(id))) return true;
 
   // Individual seat pass references (e.g. SJ-7046-S8)
-  const isRaffleOnly = booking.tableBookingOption === 'Raffle Tickets Only';
-  const isDonationOnly = booking.tableBookingOption === 'Direct Donation Only';
-
-  if (!isRaffleOnly && !isDonationOnly) {
+  const seatsCount = getBookingSeatCount(booking);
+  if (seatsCount > 0) {
     if (booking.allocatedSeats && Array.isArray(booking.allocatedSeats)) {
       for (const s of booking.allocatedSeats) {
         const passRef = `${baseRef}-s${s}`;
@@ -137,7 +152,6 @@ export function matchBookingSearch(booking, rawSearchTerm) {
         if (term === `s${s}` || term === `seat ${s}` || term === `seat #${s}`) return true;
       }
     }
-    const seatsCount = Number(booking.numTickets) || 0;
     for (let s = 1; s <= seatsCount; s++) {
       const passRef = `${baseRef}-s${s}`;
       if (passRef === term || passRef.includes(term) || term.includes(passRef)) return true;
@@ -204,7 +218,7 @@ A new guest has submitted a booking requesting to pay via Direct EFT:
 • Mobile Number: ${booking.mobileNumber}
 • Email: ${booking.email}
 • Table Allocation: ${tableText}
-• Dance Tickets: ${booking.numTickets || 1} Seat(s)
+• Dance Tickets: ${getBookingSeatCount(booking)} Seat(s)
 • Raffle Tickets: ${booking.raffleTicketsCount || 0} Ticket(s)
 • Total Amount Due: R${booking.amount || 0}
 • Payment Status: ⏳ PENDING EFT CLEARANCE
@@ -224,10 +238,12 @@ export function generateTicketEmailBody(booking) {
   const ticketRef = getShortReference(booking);
   const seatsText = booking.allocatedSeats && booking.allocatedSeats.length > 0
     ? `Seat(s) #${booking.allocatedSeats.join(', ')}`
-    : `${booking.numTickets || 1} Seat(s)`;
+    : `${getBookingSeatCount(booking)} Seat(s)`;
 
   const tableText = booking.tableBookingOption === 'Raffle Tickets Only' 
     ? '🎟️ Raffle Supporter Pass (No Table Seat)' 
+    : booking.tableBookingOption === 'Direct Donation Only'
+    ? '💝 Direct Donation Supporter (No Table Seat)'
     : `Table #${booking.tableNumber || 1} • ${seatsText} (${booking.tableBookingOption || 'Standard Dance Ticket'})`;
 
   const isEftPending = booking.paymentStatus === 'pending_eft';
@@ -245,7 +261,7 @@ Thank you for your ticket purchase and generous support in aid of Sloan Jooste's
 • Guest Name: ${booking.firstName || ''} ${booking.surname || ''}
 • Table Allocation: Table #${booking.tableNumber || 1}
 • Seat Allocation: ${seatsText}
-• Dance Tickets Reserved: ${booking.numTickets || 1} Seat(s)
+• Dance Tickets Reserved: ${getBookingSeatCount(booking)} Seat(s)
 • Raffle Tickets: ${booking.raffleTicketsCount || 0} Entry/ies
 • Total Amount: R${booking.amount || 0}
 • Payment Method: ${booking.paymentMethod === 'eft' ? 'Direct EFT Bank Transfer' : 'Instant Transfer'}
@@ -368,7 +384,7 @@ export function generateHtmlTicketEmail(booking) {
           </td>
           <td style="width: 50%; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 10px 12px;">
             <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #166534;">Tickets & Slices</div>
-            <div style="font-size: 14px; font-weight: 900; color: #14532d; margin-top: 2px;">${booking.numTickets || 1} Dance ${booking.raffleTicketsCount > 0 ? `• ${booking.raffleTicketsCount} Raffle` : ''}</div>
+            <div style="font-size: 14px; font-weight: 900; color: #14532d; margin-top: 2px;">${getBookingSeatCount(booking)} Dance ${booking.raffleTicketsCount > 0 ? `• ${booking.raffleTicketsCount} Raffle` : ''}</div>
           </td>
         </tr>
         <tr>
@@ -439,6 +455,8 @@ export function generateWhatsAppMessage(booking) {
   const ticketRef = getShortReference(booking);
   const tableText = booking.tableBookingOption === 'Raffle Tickets Only' 
     ? '🎟️ Raffle Supporter' 
+    : booking.tableBookingOption === 'Direct Donation Only'
+    ? '💝 Direct Donation'
     : `Table #${booking.tableNumber || 1}`;
 
   const isEftPending = booking.paymentStatus === 'pending_eft';
@@ -449,7 +467,7 @@ export function generateWhatsAppMessage(booking) {
 Hello *${booking.firstName} ${booking.surname}*! We received your booking request:
 
 *• Booking Ref:* ${ticketRef}
-*• Seating:* ${tableText} (${booking.numTickets || 1} Seat/s)
+*• Seating:* ${tableText} (${getBookingSeatCount(booking)} Seat/s)
 *• Raffle Tickets:* ${booking.raffleTicketsCount || 0} Entry/ies
 *• Total Due:* R${booking.amount || 0}
 *• Status:* ⏳ Awaiting Bank Funds Clearance by Organizers
@@ -464,7 +482,7 @@ Bank: FNB/RMB | Acc Holder: Charlton Jooste | Acc: 62334900091 | Branch: 250655
 Hello *${booking.firstName} ${booking.surname}*! Here is your official pass details for Sloan Jooste's Fundraiser Dance:
 
 *• Ticket Reference:* ${ticketRef}
-*• Seating:* ${tableText} (${booking.numTickets || 1} Seat/s)
+*• Seating:* ${tableText} (${getBookingSeatCount(booking)} Seat/s)
 *• Raffle Tickets:* ${booking.raffleTicketsCount || 0} Entry/ies
 *• Total Paid:* R${booking.amount || 0}
 *• Status:* ✅ Confirmed & Paid
@@ -501,7 +519,7 @@ export async function createBookingInFirestore(bookingData) {
     surname: bookingData.surname || '',
     mobileNumber: bookingData.mobileNumber || '',
     email: (bookingData.email || '').trim().toLowerCase(),
-    numTickets: Number(bookingData.numTickets) || 1,
+    numTickets: bookingData.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (bookingData.tableBookingOption === 'Raffle Tickets Only' || bookingData.tableBookingOption === 'Direct Donation Only') ? 0 : Number(bookingData.numTickets) || 1,
     raffleTicketsCount: Number(bookingData.raffleTicketsCount) || 0,
     raffleEntrants: bookingData.raffleEntrants || [],
     tableBookingOption: bookingData.tableBookingOption || 'Standard Dance Ticket',
@@ -565,7 +583,8 @@ export async function createBookingInFirestore(bookingData) {
   }
 
   // Update tables collection seat allocation (only if card payment paid immediately)
-  if (!isEft && newBookingPayload.tableBookingOption !== 'Raffle Tickets Only') {
+  const seatsToReserve = getBookingSeatCount(newBookingPayload);
+  if (!isEft && seatsToReserve > 0) {
     try {
       const tableDocRef = doc(db, 'tables', `table_${newBookingPayload.tableNumber}`);
       const tableSnap = await getDoc(tableDocRef);
@@ -574,13 +593,13 @@ export async function createBookingInFirestore(bookingData) {
         const currentData = tableSnap.data();
         const currentBookings = currentData.bookings || [];
         await updateDoc(tableDocRef, {
-          seatsReserved: (currentData.seatsReserved || 0) + newBookingPayload.numTickets,
+          seatsReserved: (currentData.seatsReserved || 0) + seatsToReserve,
           bookings: [...currentBookings, bookingId]
         });
       } else {
         await setDoc(tableDocRef, {
           capacity: 10,
-          seatsReserved: newBookingPayload.numTickets,
+          seatsReserved: seatsToReserve,
           bookings: [bookingId]
         });
       }
@@ -613,7 +632,8 @@ export async function approveEftPayment(booking) {
     });
 
     // Update table seat reservation count
-    if (booking.tableBookingOption !== 'Raffle Tickets Only') {
+    const seatsToReserve = getBookingSeatCount(booking);
+    if (seatsToReserve > 0) {
       const tableDocRef = doc(db, 'tables', `table_${booking.tableNumber}`);
       const tableSnap = await getDoc(tableDocRef);
       
@@ -621,7 +641,7 @@ export async function approveEftPayment(booking) {
         const currentData = tableSnap.data();
         const currentBookings = currentData.bookings || [];
         await updateDoc(tableDocRef, {
-          seatsReserved: (currentData.seatsReserved || 0) + (Number(booking.numTickets) || 1),
+          seatsReserved: (currentData.seatsReserved || 0) + seatsToReserve,
           bookings: Array.from(new Set([...currentBookings, booking.id]))
         });
       }
