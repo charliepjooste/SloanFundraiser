@@ -642,7 +642,7 @@ export default function BookingWizard({
                       >
                         <Table className="w-4 h-4 mb-1 text-purple-700" />
                         <span className="text-xs font-bold">Table #{t}</span>
-                        <span className="text-[9px] text-emerald-700 font-semibold">10 Free</span>
+                        <span className="text-[9px] text-emerald-700 font-black">10 Seats Left</span>
                       </button>
                     ))}
                   </div>

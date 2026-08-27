@@ -86,6 +86,32 @@ export default function GuestManagementTab({
     return matchesSearch;
   });
 
+  // Dynamic table occupancy calculation across 35 tables (10 capacity each = 350 seats)
+  const tables = Array.from({ length: 35 }, (_, i) => {
+    const tableNo = i + 1;
+    const tableBookings = (bookings || []).filter(
+      b => Number(b.tableNumber) === tableNo && 
+      b.tableBookingOption !== 'Raffle Tickets Only' && 
+      b.tableBookingOption !== 'Direct Donation Only'
+    );
+    const occupiedSeats = tableBookings.reduce(
+      (sum, b) => sum + (b.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (Number(b.numTickets) || 1)), 
+      0
+    );
+    const capacity = 10;
+    const remainingSeats = Math.max(0, capacity - occupiedSeats);
+    const isFull = remainingSeats === 0 || occupiedSeats >= capacity;
+
+    return {
+      tableNumber: tableNo,
+      capacity,
+      occupiedSeats,
+      remainingSeats,
+      isFull,
+      bookings: tableBookings
+    };
+  });
+
   // Calculate summary stats
   const totalGuests = bookings.reduce((sum, b) => sum + (Number(b.numTickets) || 0), 0);
   const totalRaffleTicketsBought = bookings.reduce((sum, b) => sum + (Number(b.raffleTicketsCount) || 0), 0);
@@ -314,11 +340,13 @@ export default function GuestManagementTab({
             <select
               value={tableFilter}
               onChange={(e) => setTableFilter(e.target.value)}
-              className="bg-transparent text-slate-900 font-semibold focus:outline-none text-xs"
+              className="bg-transparent text-slate-900 font-bold focus:outline-none text-xs"
             >
               <option value="all">All 35 Tables</option>
-              {Array.from({ length: 35 }, (_, i) => (
-                <option key={i + 1} value={i + 1}>Table #{i + 1}</option>
+              {tables.map((t) => (
+                <option key={t.tableNumber} value={t.tableNumber}>
+                  Table #{t.tableNumber} {t.isFull ? '(🔴 FULL)' : `(🟢 ${t.remainingSeats} Seats Left)`}
+                </option>
               ))}
             </select>
           </div>
@@ -403,9 +431,24 @@ export default function GuestManagementTab({
                       </span>
                     ) : (
                       <div className="space-y-1">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold text-xs">
-                          <Table className="w-3.5 h-3.5 text-emerald-600" /> Table #{b.tableNumber}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold text-xs">
+                            <Table className="w-3.5 h-3.5 text-emerald-600" /> Table #{b.tableNumber}
+                          </span>
+                          {(() => {
+                            const tObj = tables.find(t => t.tableNumber === Number(b.tableNumber));
+                            if (!tObj) return null;
+                            return (
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
+                                tObj.isFull 
+                                  ? 'bg-rose-100 text-rose-800 border-rose-300' 
+                                  : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                              }`}>
+                                {tObj.isFull ? '🔴 FULL' : `🟢 ${tObj.remainingSeats} Left`}
+                              </span>
+                            );
+                          })()}
+                        </div>
                         {b.allocatedSeats && b.allocatedSeats.length > 0 && (
                           <span className="block text-[10px] text-purple-900 font-bold">
                             Seat(s) #{b.allocatedSeats.join(', ')}
@@ -628,11 +671,23 @@ export default function GuestManagementTab({
                     <select
                       value={editingGuest.tableNumber}
                       onChange={(e) => setEditingGuest({ ...editingGuest, tableNumber: Number(e.target.value) })}
-                      className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 font-semibold focus:outline-none focus:border-emerald-600"
+                      className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 font-bold focus:outline-none focus:border-emerald-600"
                     >
-                      {Array.from({ length: 35 }, (_, i) => (
-                        <option key={i + 1} value={i + 1}>Table #{i + 1}</option>
-                      ))}
+                      {tables.map(t => {
+                        const isCurrentTable = Number(editingGuest.tableNumber) === t.tableNumber;
+                        const originalGuestBooking = bookings.find(b => b.id === editingGuest.id);
+                        const originalTickets = (originalGuestBooking && Number(originalGuestBooking.tableNumber) === t.tableNumber) 
+                          ? (Number(originalGuestBooking.numTickets) || 0) 
+                          : 0;
+                        const effectiveRemaining = isCurrentTable ? Math.min(10, t.remainingSeats + originalTickets) : t.remainingSeats;
+                        const isTableFull = effectiveRemaining === 0;
+
+                        return (
+                          <option key={t.tableNumber} value={t.tableNumber}>
+                            Table #{t.tableNumber} — {isTableFull ? '🔴 FULL (0 seats left)' : `🟢 ${effectiveRemaining} seats left (${10 - effectiveRemaining}/10 booked)`} {isCurrentTable ? '← (Current)' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                   <div>
@@ -640,7 +695,7 @@ export default function GuestManagementTab({
                     <select
                       value={editingGuest.numTickets}
                       onChange={(e) => setEditingGuest({ ...editingGuest, numTickets: Number(e.target.value) })}
-                      className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 font-semibold focus:outline-none focus:border-emerald-600"
+                      className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 font-bold focus:outline-none focus:border-emerald-600"
                     >
                       {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
                         <option key={n} value={n}>{n} Seat{n !== 1 ? 's' : ''}</option>
@@ -648,6 +703,37 @@ export default function GuestManagementTab({
                     </select>
                   </div>
                 </div>
+
+                {/* Table availability preview & warning */}
+                {(() => {
+                  const selectedT = tables.find(t => t.tableNumber === Number(editingGuest.tableNumber));
+                  if (!selectedT) return null;
+                  const originalGuestBooking = bookings.find(b => b.id === editingGuest.id);
+                  const originalTickets = (originalGuestBooking && Number(originalGuestBooking.tableNumber) === selectedT.tableNumber) 
+                    ? (Number(originalGuestBooking.numTickets) || 0) 
+                    : 0;
+                  const effectiveRemaining = Math.min(10, selectedT.remainingSeats + originalTickets);
+                  const requested = Number(editingGuest.numTickets) || 0;
+                  const canFit = effectiveRemaining >= requested;
+
+                  return (
+                    <div className={`p-2.5 rounded-xl border text-xs font-semibold ${
+                      effectiveRemaining === 0 
+                        ? 'bg-rose-50 border-rose-300 text-rose-800' 
+                        : !canFit 
+                        ? 'bg-amber-50 border-amber-300 text-amber-900' 
+                        : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                    }`}>
+                      {effectiveRemaining === 0 ? (
+                        <span>🔴 Table #{selectedT.tableNumber} is currently FULL (0 seats left).</span>
+                      ) : !canFit ? (
+                        <span>⚠️ Table #{selectedT.tableNumber} only has {effectiveRemaining} seat(s) left for this booking. You selected {requested} tickets.</span>
+                      ) : (
+                        <span>🟢 Table #{selectedT.tableNumber}: {effectiveRemaining} seats left ({10 - effectiveRemaining}/10 booked).</span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Raffle Tickets & Individual Entrant Allocation */}
@@ -789,10 +875,12 @@ export default function GuestManagementTab({
                   <select
                     value={addForm.tableNumber}
                     onChange={(e) => setAddForm({ ...addForm, tableNumber: Number(e.target.value) })}
-                    className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                    className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-600 font-bold"
                   >
-                    {Array.from({ length: 35 }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>Table #{i + 1}</option>
+                    {tables.map(t => (
+                      <option key={t.tableNumber} value={t.tableNumber} disabled={t.isFull}>
+                        Table #{t.tableNumber} — {t.isFull ? '🔴 FULL (0 seats left)' : `🟢 ${t.remainingSeats} seats left`}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -801,7 +889,7 @@ export default function GuestManagementTab({
                   <select
                     value={addForm.numTickets}
                     onChange={(e) => setAddForm({ ...addForm, numTickets: Number(e.target.value) })}
-                    className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                    className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-600 font-bold"
                   >
                     {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
                       <option key={n} value={n}>{n} Ticket{n !== 1 ? 's' : ''}</option>
@@ -809,6 +897,32 @@ export default function GuestManagementTab({
                   </select>
                 </div>
               </div>
+
+              {/* Table Seat Availability Helper */}
+              {(() => {
+                const selectedT = tables.find(t => t.tableNumber === Number(addForm.tableNumber));
+                if (!selectedT) return null;
+                const requested = Number(addForm.numTickets);
+                const hasCapacity = selectedT.remainingSeats >= requested;
+
+                return (
+                  <div className={`p-2.5 rounded-xl border text-xs font-semibold ${
+                    selectedT.isFull 
+                      ? 'bg-rose-50 border-rose-300 text-rose-800' 
+                      : !hasCapacity 
+                      ? 'bg-amber-50 border-amber-300 text-amber-900' 
+                      : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                  }`}>
+                    {selectedT.isFull ? (
+                      <span>🔴 Table #{selectedT.tableNumber} is FULL (0 seats left). Please select another table.</span>
+                    ) : !hasCapacity ? (
+                      <span>⚠️ Table #{selectedT.tableNumber} only has {selectedT.remainingSeats} seat(s) left. Cannot assign {requested} seats.</span>
+                    ) : (
+                      <span>🟢 Table #{selectedT.tableNumber}: {selectedT.remainingSeats} seats left ({selectedT.occupiedSeats}/10 booked).</span>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -841,13 +955,17 @@ export default function GuestManagementTab({
                 <button
                   type="button"
                   onClick={() => setIsAddGuestModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-extrabold text-xs shadow-md hover:bg-emerald-700 transition"
+                  disabled={(() => {
+                    const selectedT = tables.find(t => t.tableNumber === Number(addForm.tableNumber));
+                    return selectedT && selectedT.remainingSeats < Number(addForm.numTickets);
+                  })()}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-extrabold text-xs shadow-md hover:bg-emerald-700 transition disabled:opacity-40 cursor-pointer"
                 >
                   Add to Table #{addForm.tableNumber}
                 </button>
