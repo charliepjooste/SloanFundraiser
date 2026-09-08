@@ -78,11 +78,13 @@ export const EVENT_DETAILS = {
     { name: "Marsha Beukes", phone: "079 528 5350" }
   ],
   banking: {
-    bank: "FNB/RMB",
+    bank: "First National Bank (FNB)",
     accountHolder: "Charlton Jooste",
     accountType: "FNB Private Clients Current Account",
     accountNumber: "62334900091",
     branchCode: "250655",
+    swiftCode: "FIRNZAJJ",
+    country: "South Africa",
     referenceInstruction: "Use your Ticket Reference (e.g. REF: SJ-XXXX) to purchase additional raffle tickets via EFT!"
   }
 };
@@ -278,11 +280,13 @@ Thank you for your ticket purchase and generous support in aid of Sloan Jooste's
 🏦 BANKING DETAILS FOR DIRECT EFT PAYMENT
 ==================================================
 Please make an EFT transfer to:
+• Beneficiary Name: ${EVENT_DETAILS.banking.accountHolder}
 • Bank: ${EVENT_DETAILS.banking.bank}
-• Account Holder: ${EVENT_DETAILS.banking.accountHolder}
-• Account Type: ${EVENT_DETAILS.banking.accountType}
 • Account Number: ${EVENT_DETAILS.banking.accountNumber}
 • Branch Code: ${EVENT_DETAILS.banking.branchCode}
+• SWIFT/BIC: ${EVENT_DETAILS.banking.swiftCode}
+• Country: ${EVENT_DETAILS.banking.country}
+• Account Type: ${EVENT_DETAILS.banking.accountType}
 • Payment Reference: ${ticketRef} (Important: Please use reference ${ticketRef})
 
 ==================================================
@@ -427,12 +431,14 @@ export function generateHtmlTicketEmail(booking) {
           💳 Buy Extra Raffle Tickets via EFT (R50/1 • R100/3)
         </div>
         <div style="color: #475569; margin-bottom: 6px;">Make an EFT using your short reference to enter our 7 Grand Prizes:</div>
-        <div style="background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 8px; font-family: monospace; font-size: 11px;">
+        <div style="background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 8px; font-family: monospace; font-size: 11px; line-height: 1.5;">
+          <strong>Beneficiary Name:</strong> ${EVENT_DETAILS.banking.accountHolder}<br>
           <strong>Bank:</strong> ${EVENT_DETAILS.banking.bank}<br>
-          <strong>Account Holder:</strong> ${EVENT_DETAILS.banking.accountHolder}<br>
-          <strong>Account Type:</strong> ${EVENT_DETAILS.banking.accountType}<br>
           <strong>Account No:</strong> ${EVENT_DETAILS.banking.accountNumber}<br>
           <strong>Branch Code:</strong> ${EVENT_DETAILS.banking.branchCode}<br>
+          <strong>SWIFT/BIC:</strong> ${EVENT_DETAILS.banking.swiftCode}<br>
+          <strong>Country:</strong> ${EVENT_DETAILS.banking.country}<br>
+          <strong>Account Type:</strong> ${EVENT_DETAILS.banking.accountType}<br>
           <strong style="color: #15803d;">Payment Reference: ${ticketRef}</strong>
         </div>
       </div>
@@ -475,7 +481,13 @@ Hello *${booking.firstName} ${booking.surname}*! We received your booking reques
 *• Status:* ⏳ Awaiting Bank Funds Clearance by Organizers
 
 *🏦 Please EFT R${booking.amount} to:*
-Bank: FNB/RMB | Acc Holder: Charlton Jooste | Acc: 62334900091 | Branch: 250655
+• Beneficiary: ${EVENT_DETAILS.banking.accountHolder}
+• Bank: ${EVENT_DETAILS.banking.bank}
+• Account: ${EVENT_DETAILS.banking.accountNumber}
+• Branch Code: ${EVENT_DETAILS.banking.branchCode}
+• SWIFT/BIC: ${EVENT_DETAILS.banking.swiftCode}
+• Country: ${EVENT_DETAILS.banking.country}
+• Account Type: ${EVENT_DETAILS.banking.accountType}
 *Ref:* ${ticketRef}
 
 *Note:* Once cleared by Charlie or Nicole, your official ticket pass with QR code will be activated! 💚`
@@ -498,7 +510,7 @@ Hello *${booking.firstName} ${booking.surname}*! Here is your official pass deta
 *🎵 Music:* Live Music by The Elginairs & DJ Cool J
 
 *🎁 BUY EXTRA RAFFLE TICKETS (R50 for 1 / R100 for 3):*
-Bank: FNB/RMB | Acc Holder: Charlton Jooste | Acc: 62334900091 | Branch: 250655
+Beneficiary: ${EVENT_DETAILS.banking.accountHolder} | Bank: ${EVENT_DETAILS.banking.bank} | Acc: ${EVENT_DETAILS.banking.accountNumber} | Branch: ${EVENT_DETAILS.banking.branchCode} | SWIFT: ${EVENT_DETAILS.banking.swiftCode} | Country: ${EVENT_DETAILS.banking.country}
 *Ref:* ${ticketRef}
 
 See you on the dancefloor! 💚`;
@@ -854,16 +866,136 @@ export function subscribeBookings(callback) {
  * Real-time subscription to Tables
  */
 export function subscribeTables(callback) {
+  // Emit local cache immediately if available
+  try {
+    const cachedTables = localStorage.getItem('sloan_cached_tables');
+    if (cachedTables) {
+      const parsed = JSON.parse(cachedTables);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        callback(parsed);
+      }
+    }
+  } catch (e) {}
+
   return onSnapshot(tablesCol, (snapshot) => {
-    const tablesList = snapshot.docs.map(docSnap => ({
+    const firestoreTables = snapshot.docs.map(docSnap => ({
       id: docSnap.id,
       ...docSnap.data()
     }));
-    callback(tablesList);
+
+    // Merge with any cached notes
+    try {
+      const cachedNotesStr = localStorage.getItem('sloan_cached_table_notes');
+      if (cachedNotesStr) {
+        const notesMap = JSON.parse(cachedNotesStr);
+        Object.entries(notesMap).forEach(([tNum, noteData]) => {
+          const existing = firestoreTables.find(t => t.id === `table_${tNum}` || Number(t.tableNumber) === Number(tNum));
+          if (existing) {
+            if (noteData.tableName !== undefined && !existing.tableName) existing.tableName = noteData.tableName;
+            if (noteData.tableNote !== undefined && !existing.tableNote) existing.tableNote = noteData.tableNote;
+          } else {
+            firestoreTables.push({
+              id: `table_${tNum}`,
+              tableNumber: Number(tNum),
+              capacity: 10,
+              ...noteData
+            });
+          }
+        });
+      }
+    } catch (e) {}
+
+    try {
+      localStorage.setItem('sloan_cached_tables', JSON.stringify(firestoreTables));
+    } catch (e) {}
+
+    callback(firestoreTables);
   }, (error) => {
     console.error("Firestore Tables subscribe error:", error);
-    callback(null);
+    try {
+      const cachedTables = localStorage.getItem('sloan_cached_tables');
+      if (cachedTables) {
+        callback(JSON.parse(cachedTables));
+        return;
+      }
+    } catch (e) {}
+    callback([]);
   });
+}
+
+/**
+ * Update or assign a custom note / owner name to a table (Admin only)
+ */
+export async function updateTableNote(tableNumber, noteData) {
+  const tableNum = Number(tableNumber);
+  const tableId = `table_${tableNum}`;
+  const tableDocRef = doc(db, 'tables', tableId);
+  const now = new Date().toISOString();
+
+  let tableName = '';
+  let tableNote = '';
+
+  if (typeof noteData === 'string') {
+    tableName = noteData.trim();
+    tableNote = noteData.trim();
+  } else if (noteData && typeof noteData === 'object') {
+    tableName = (noteData.tableName !== undefined ? noteData.tableName : (noteData.name || '')).trim();
+    tableNote = (noteData.tableNote !== undefined ? noteData.tableNote : (noteData.note || '')).trim();
+  }
+
+  const payload = {
+    tableNumber: tableNum,
+    tableName,
+    tableNote,
+    updatedAt: now
+  };
+
+  // Sync to local persistent cache first
+  try {
+    const cached = localStorage.getItem('sloan_cached_table_notes');
+    const map = cached ? JSON.parse(cached) : {};
+    map[tableNum] = payload;
+    localStorage.setItem('sloan_cached_table_notes', JSON.stringify(map));
+
+    const cachedTablesStr = localStorage.getItem('sloan_cached_tables');
+    if (cachedTablesStr) {
+      let list = JSON.parse(cachedTablesStr);
+      if (Array.isArray(list)) {
+        const found = list.find(t => t.id === tableId || Number(t.tableNumber) === tableNum);
+        if (found) {
+          list = list.map(t => (t.id === tableId || Number(t.tableNumber) === tableNum) ? { ...t, ...payload } : t);
+        } else {
+          list.push({ id: tableId, ...payload, capacity: 10 });
+        }
+        localStorage.setItem('sloan_cached_tables', JSON.stringify(list));
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const snap = await getDoc(tableDocRef);
+    if (snap.exists()) {
+      await updateDoc(tableDocRef, payload);
+    } else {
+      await setDoc(tableDocRef, {
+        capacity: 10,
+        seatsReserved: 0,
+        bookings: [],
+        ...payload
+      });
+    }
+  } catch (err) {
+    console.warn("Firestore updateTableNote warning (saved locally):", err);
+  }
+
+  return payload;
+}
+
+/**
+ * Remove or clear table note / owner name
+ */
+export async function clearTableNote(tableNumber) {
+  return updateTableNote(tableNumber, { tableName: '', tableNote: '' });
 }
 
 /**

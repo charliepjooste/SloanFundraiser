@@ -450,15 +450,25 @@ export default function GuestManagementTab({
                           </span>
                           {(() => {
                             const tObj = tables.find(t => t.tableNumber === Number(b.tableNumber));
-                            if (!tObj) return null;
+                            const tMeta = (tablesData || []).find(t => t.id === `table_${b.tableNumber}` || Number(t.tableNumber) === Number(b.tableNumber));
+                            const tableName = tMeta?.tableName;
                             return (
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
-                                tObj.isFull 
-                                  ? 'bg-rose-100 text-rose-800 border-rose-300' 
-                                  : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                              }`}>
-                                {tObj.isFull ? '🔴 FULL' : `🟢 ${tObj.remainingSeats} Left`}
-                              </span>
+                              <>
+                                {tableName && (
+                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-purple-100 text-purple-950 border border-purple-200" title={`Table belongs to: ${tableName}`}>
+                                    🏷️ {tableName}
+                                  </span>
+                                )}
+                                {tObj && (
+                                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
+                                    tObj.isFull 
+                                      ? 'bg-rose-100 text-rose-800 border-rose-300' 
+                                      : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                                  }`}>
+                                    {tObj.isFull ? '🔴 FULL' : `🟢 ${tObj.remainingSeats} Left`}
+                                  </span>
+                                )}
+                              </>
                             );
                           })()}
                         </div>

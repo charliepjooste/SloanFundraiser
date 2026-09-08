@@ -40,8 +40,8 @@ Event Details:
   4. 4th Draw: Chivas Regal 13YO Rum Cask Scotch Whisky 1L (Value: R2,000)
   5. 5th Draw: Chivas Regal 13YO American Rye Cask Scotch Whisky 1L (Value: R2,000)
   6. 6th Draw: Photoshoot for a Couple (Value: R2,500)
-  7. 7th Draw (GRAND FINALE): Whole Lamb (Value: R2,000) — Drawn Last!
-- Banking Details for Raffle Tickets: FNB/RMB | Acc Holder: Charlton Jooste | Acc: 62334900091 | Branch: 250655 | Ref: [Ticket Number / Booking ID]
+  7. 7th Draw (GRAND FINALE): Whole Lamb (Value: R2,500) — Drawn Last!
+- Banking Details: Beneficiary Name: Charlton Jooste | Bank: First National Bank (FNB) | Account Number: 62334900091 | Branch Code: 250655 | SWIFT/BIC: FIRNZAJJ | Country: South Africa | Account Type: FNB Private Clients Current Account | Ref: [Ticket Number / Booking ID]
 - Contacts: Nicole Jooste (071 113 4812) / Marsha Beukes (079 528 5350)
 
 Guest Question: ${userPrompt}`
@@ -54,8 +54,11 @@ Guest Question: ${userPrompt}`
 
   // Smart Contextual Concierge Fallbacks
   const promptLower = userPrompt.toLowerCase();
+  if (promptLower.includes('bank') || promptLower.includes('eft') || promptLower.includes('account') || promptLower.includes('swift') || promptLower.includes('banking') || promptLower.includes('pay') || promptLower.includes('bic')) {
+    return "🏦 **Official Banking Details for EFT Payments & Raffle Entries**:\n• **Beneficiary Name**: Charlton Jooste\n• **Bank**: First National Bank (FNB)\n• **Account Number**: 62334900091\n• **Branch Code**: 250655\n• **SWIFT/BIC**: FIRNZAJJ\n• **Country**: South Africa\n• **Account Type**: FNB Private Clients Current Account\n• **Reference**: Your Ticket Reference (e.g. SJ-XXXX) or Full Name";
+  }
   if (promptLower.includes('raffle') || promptLower.includes('prize') || promptLower.includes('draw') || promptLower.includes('lamb') || promptLower.includes('chivas') || promptLower.includes('massage') || promptLower.includes('spyced') || promptLower.includes('photoshoot')) {
-    return "🎟️ **Official Raffle Prizes (Total Value: R11,520)** (Drawn 21:00 - 21:30):\n1. 💆 **Draw 1 & 2**: Hot Stone Massage at Radiance Room (R600 each)\n2. 🍽️ **Draw 3**: Spyced Restaurant Voucher (R1,820)\n3. 🍾 **Draw 4**: Chivas Regal 13YO Rum Cask (1L) (R2,000)\n4. 🥃 **Draw 5**: Chivas Regal 13YO American Rye Cask (1L) (R2,000)\n5. 📸 **Draw 6**: Photoshoot for a Couple (R2,500)\n6. 🥩 **Draw 7 (Grand Finale)**: **Whole Lamb** (R2,000) — Drawn Last!\n\n*Tickets: R50 for 1, R100 for 3. Each winner is removed after winning so prizes go to 7 separate winners!*";
+    return "🎟️ **Official Raffle Prizes (Total Value: R12,020)** (Drawn 21:00 - 21:30):\n1. 💆 **Draw 1 & 2**: Hot Stone Massage at Radiance Room (R600 each)\n2. 🍽️ **Draw 3**: Spyced Restaurant Voucher (R1,820)\n3. 🍾 **Draw 4**: Chivas Regal 13YO Rum Cask (1L) (R2,000)\n4. 🥃 **Draw 5**: Chivas Regal 13YO American Rye Cask (1L) (R2,000)\n5. 📸 **Draw 6**: Photoshoot for a Couple (R2,500)\n6. 🥩 **Draw 7 (Grand Finale)**: **Whole Lamb** (R2,500) — Drawn Last!\n\n*Tickets: R50 for 1, R100 for 3. Each winner is removed after winning so prizes go to 7 separate winners!*";
   }
   if (promptLower.includes('dress') || promptLower.includes('wear') || promptLower.includes('attire') || promptLower.includes('green')) {
     return "👗 **Dress Code**: **A Splash of Green** in aid of Cerebral Palsy 💚—add a touch of green to your outfit!";

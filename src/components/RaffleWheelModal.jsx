@@ -9,7 +9,7 @@ const DEFAULT_PRIZES = [
   { id: 4, drawOrder: 4, title: '4th Draw: Chivas Regal 13YO Rum Cask (1L)', subtitle: 'Blended Scotch Whisky 1 Litre Bottle', value: 'R2,000', icon: '🍾' },
   { id: 5, drawOrder: 5, title: '5th Draw: Chivas Regal 13YO American Rye Cask (1L)', subtitle: 'Blended Scotch Whisky 1 Litre Bottle', value: 'R2,000', icon: '🥃' },
   { id: 6, drawOrder: 6, title: '6th Draw: Photoshoot for a Couple', subtitle: 'Professional Couples Photo Session', value: 'R2,500', icon: '📸' },
-  { id: 7, drawOrder: 7, title: '🌟 GRAND FINALE: Whole Lamb', subtitle: 'Fresh Whole Lamb (Grand Prize Drawn Last!)', value: 'R2,000', icon: '🥩', isGrandPrize: true }
+  { id: 7, drawOrder: 7, title: '🌟 GRAND FINALE: Whole Lamb', subtitle: 'Fresh Whole Lamb (Grand Prize Drawn Last!)', value: 'R2,500', icon: '🥩', isGrandPrize: true }
 ];
 
 // Helper to shuffle & distribute tickets so identical names are spaced apart and never adjacent

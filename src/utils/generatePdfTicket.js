@@ -226,10 +226,10 @@ async function drawSingleTicketPage(pdf, booking, itemData) {
   pdf.text("BUY EXTRA RAFFLE TICKETS VIA EFT (R50 / 1 • R100 / 3)", cardX + 12, currentY + 5);
 
   pdf.setFont('courier', 'normal');
-  pdf.setFontSize(7);
+  pdf.setFontSize(6.8);
   pdf.setTextColor(59, 7, 100);
-  pdf.text(`Bank: ${EVENT_DETAILS.banking.bank} | Acc: ${EVENT_DETAILS.banking.accountNumber} | Branch: ${EVENT_DETAILS.banking.branchCode}`, cardX + 12, currentY + 10);
-  pdf.text(`Acc Holder: ${EVENT_DETAILS.banking.accountHolder} | Type: ${EVENT_DETAILS.banking.accountType}`, cardX + 12, currentY + 14.5);
+  pdf.text(`Beneficiary: ${EVENT_DETAILS.banking.accountHolder} | Bank: ${EVENT_DETAILS.banking.bank}`, cardX + 12, currentY + 10);
+  pdf.text(`Acc: ${EVENT_DETAILS.banking.accountNumber} | Branch: ${EVENT_DETAILS.banking.branchCode} | SWIFT / BIC: ${EVENT_DETAILS.banking.swiftCode} | ${EVENT_DETAILS.banking.country}`, cardX + 12, currentY + 14.5);
 
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(7);

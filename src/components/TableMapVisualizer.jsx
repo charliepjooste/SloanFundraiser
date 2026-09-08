@@ -21,6 +21,8 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
     const reserved = bookings && bookings.length > 0 ? bookingsSeats : (existingTable?.seatsReserved || 0);
     const remaining = Math.max(0, capacity - reserved);
     const isFull = remaining === 0 || reserved >= capacity;
+    const tableName = (existingTable?.tableName || '').trim();
+    const tableNote = (existingTable?.tableNote || '').trim();
 
     return {
       tableNumber: tableNo,
@@ -28,7 +30,9 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
       reserved,
       remaining,
       isFull,
-      guestCount: tableBookings.length
+      guestCount: tableBookings.length,
+      tableName,
+      tableNote
     };
   });
 
@@ -84,7 +88,7 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
               onClick={() => onSelectTable && onSelectTable(table.tableNumber)}
               className={`p-2.5 rounded-xl border text-left transition-all duration-200 relative cursor-pointer ${statusBg}`}
             >
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-0.5">
                 <span className="text-[11px] font-black uppercase tracking-wider text-purple-950">
                   Table #{table.tableNumber}
                 </span>
@@ -95,6 +99,12 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
                   <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
                 )}
               </div>
+
+              {table.tableName && (
+                <div className="text-[9px] font-black text-purple-950 truncate px-1 py-0.5 rounded bg-purple-100/90 text-center mb-1 border border-purple-200" title={table.tableName}>
+                  🏷️ {table.tableName}
+                </div>
+              )}
 
               {/* Table Graphic showing Seats Left */}
               <div className="flex items-center justify-center my-1 py-0.5">

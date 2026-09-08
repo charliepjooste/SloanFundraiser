@@ -543,8 +543,8 @@ export default function MyTicketsModal({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-800">
                               <div className="p-2 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
                                 <div>
-                                  <span className="text-[9px] text-slate-500 block">Bank & Account Holder</span>
-                                  <span className="font-bold text-[11px] text-slate-900">{EVENT_DETAILS.banking.bank} • {EVENT_DETAILS.banking.accountHolder}</span>
+                                  <span className="text-[9px] text-slate-500 block">Beneficiary & Bank</span>
+                                  <span className="font-bold text-[11px] text-slate-900">{EVENT_DETAILS.banking.accountHolder} • {EVENT_DETAILS.banking.bank}</span>
                                 </div>
                               </div>
 
@@ -563,7 +563,22 @@ export default function MyTicketsModal({
                                 </button>
                               </div>
 
-                              <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between sm:col-span-2">
+                              <div className="p-2 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block">Branch & SWIFT / Country</span>
+                                  <span className="font-bold text-[11px] text-slate-900">Branch: {EVENT_DETAILS.banking.branchCode} • SWIFT: {EVENT_DETAILS.banking.swiftCode} ({EVENT_DETAILS.banking.country})</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(EVENT_DETAILS.banking.swiftCode, `swift-${b.id}`)}
+                                  className="px-2 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-900 text-[10px] font-bold flex items-center gap-1 transition shadow-2xs"
+                                >
+                                  {copiedField === `swift-${b.id}` ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                  {copiedField === `swift-${b.id}` ? 'Copied' : 'SWIFT'}
+                                </button>
+                              </div>
+
+                              <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
                                 <div>
                                   <span className="text-[9px] text-emerald-800 block">Payment Reference</span>
                                   <span className="font-mono font-black text-emerald-950 text-xs">{ticketRef}</span>

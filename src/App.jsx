@@ -33,6 +33,8 @@ import {
 import { 
   subscribeBookings, 
   subscribeTables, 
+  updateTableNote,
+  clearTableNote,
   EVENT_DETAILS, 
   getShortReference,
   getBookingSeatCount,
@@ -210,6 +212,32 @@ export default function App() {
     }
     setActiveTab('overview');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Instant local state updater for Table Notes & Table Names (Admin only)
+  const handleUpdateTableNote = async (tableNumber, noteData) => {
+    const tableNum = Number(tableNumber);
+    const tableId = `table_${tableNum}`;
+    const name = (noteData?.tableName !== undefined ? noteData.tableName : (noteData?.name || '')).trim();
+    const note = (noteData?.tableNote !== undefined ? noteData.tableNote : (noteData?.note || '')).trim();
+
+    setTablesData(prev => {
+      const existing = (prev || []).find(t => t.id === tableId || Number(t.tableNumber) === tableNum);
+      if (existing) {
+        return (prev || []).map(t => (t.id === tableId || Number(t.tableNumber) === tableNum) 
+          ? { ...t, tableName: name, tableNote: note } 
+          : t
+        );
+      } else {
+        return [...(prev || []), { id: tableId, tableNumber: tableNum, capacity: 10, tableName: name, tableNote: note }];
+      }
+    });
+
+    try {
+      await updateTableNote(tableNum, { tableName: name, tableNote: note });
+    } catch (e) {
+      console.warn("Failed to persist table note:", e);
+    }
   };
 
   // Reset / Clear All Bookings to ZERO
@@ -503,13 +531,24 @@ export default function App() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs font-mono">
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Bank & Account Holder</span>
-                  <span className="font-bold text-slate-900">{EVENT_DETAILS.banking.bank} • {EVENT_DETAILS.banking.accountHolder}</span>
+                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Beneficiary & Bank</span>
+                  <span className="font-bold text-slate-900">{EVENT_DETAILS.banking.accountHolder} • {EVENT_DETAILS.banking.bank}</span>
                 </div>
 
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] font-sans font-bold text-slate-500 block">Account Type & Branch</span>
-                  <span className="font-bold text-slate-900">{EVENT_DETAILS.banking.accountType} ({EVENT_DETAILS.banking.branchCode})</span>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-sans font-bold text-slate-500 block">SWIFT / BIC & Branch</span>
+                    <span className="font-bold text-slate-900">SWIFT: {EVENT_DETAILS.banking.swiftCode}</span>
+                    <span className="text-[10px] text-slate-500 block">Branch: {EVENT_DETAILS.banking.branchCode} ({EVENT_DETAILS.banking.country})</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(EVENT_DETAILS.banking.swiftCode, 'toast-swift')}
+                    className="px-2 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-950 text-[10px] font-bold flex items-center gap-1 transition shadow-2xs"
+                  >
+                    {copiedField === 'toast-swift' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    {copiedField === 'toast-swift' ? 'Copied' : 'Copy'}
+                  </button>
                 </div>
 
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
@@ -855,7 +894,7 @@ export default function App() {
                       <p className="font-black text-slate-900 text-base">Whole Lamb</p>
                       <p className="text-xs text-slate-600 font-medium">Grand prize for our lucky raffle supporter</p>
                     </div>
-                    <span className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-black text-sm">R2,000</span>
+                    <span className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-black text-sm">R2,500</span>
                   </div>
 
                 </div>
@@ -885,12 +924,34 @@ export default function App() {
                 <p className="text-slate-600 font-medium">
                   You can purchase additional raffle tickets via EFT directly to the fundraiser account:
                 </p>
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-purple-200 space-y-1.5 font-mono text-slate-900">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-purple-200 space-y-2 font-mono text-slate-900">
+                  <div><strong className="font-sans text-purple-900">Beneficiary:</strong> {EVENT_DETAILS.banking.accountHolder}</div>
                   <div><strong className="font-sans text-purple-900">Bank:</strong> {EVENT_DETAILS.banking.bank}</div>
-                  <div><strong className="font-sans text-purple-900">Account Holder:</strong> {EVENT_DETAILS.banking.accountHolder}</div>
-                  <div><strong className="font-sans text-purple-900">Account Type:</strong> {EVENT_DETAILS.banking.accountType}</div>
-                  <div><strong className="font-sans text-purple-900">Account Number:</strong> {EVENT_DETAILS.banking.accountNumber}</div>
+                  <div className="flex items-center justify-between">
+                    <div><strong className="font-sans text-purple-900">Account No:</strong> {EVENT_DETAILS.banking.accountNumber}</div>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(EVENT_DETAILS.banking.accountNumber, 'side-acc')}
+                      className="px-2 py-0.5 rounded bg-purple-100 hover:bg-purple-200 text-purple-950 text-[10px] font-bold font-sans flex items-center gap-1 transition"
+                    >
+                      {copiedField === 'side-acc' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      {copiedField === 'side-acc' ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
                   <div><strong className="font-sans text-purple-900">Branch Code:</strong> {EVENT_DETAILS.banking.branchCode}</div>
+                  <div className="flex items-center justify-between">
+                    <div><strong className="font-sans text-purple-900">SWIFT / BIC:</strong> {EVENT_DETAILS.banking.swiftCode}</div>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(EVENT_DETAILS.banking.swiftCode, 'side-swift')}
+                      className="px-2 py-0.5 rounded bg-purple-100 hover:bg-purple-200 text-purple-950 text-[10px] font-bold font-sans flex items-center gap-1 transition"
+                    >
+                      {copiedField === 'side-swift' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      {copiedField === 'side-swift' ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <div><strong className="font-sans text-purple-900">Country:</strong> {EVENT_DETAILS.banking.country}</div>
+                  <div><strong className="font-sans text-purple-900">Account Type:</strong> {EVENT_DETAILS.banking.accountType}</div>
                   <div className="pt-1 text-[11px] text-emerald-800 font-bold font-sans">
                     Ref: [Your Ticket Ref e.g. SJ-XXXX or Name]
                   </div>
@@ -949,6 +1010,7 @@ export default function App() {
             tablesData={tablesData}
             onUpdateBooking={handleUpdateBooking}
             onAddBooking={handleAddBooking}
+            onUpdateTableNote={handleUpdateTableNote}
           />
         )}
 

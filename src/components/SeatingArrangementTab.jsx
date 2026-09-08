@@ -12,16 +12,28 @@ import {
   Trash2, 
   ShieldCheck,
   AlertCircle,
-  LayoutGrid
+  LayoutGrid,
+  Tag,
+  Check,
+  FileText
 } from 'lucide-react';
-import { moveBookingToTable, updateBookingGuestNames, createBookingInFirestore, matchBookingSearch, getBookingSeatCount } from '../firebase';
+import { 
+  moveBookingToTable, 
+  updateBookingGuestNames, 
+  createBookingInFirestore, 
+  matchBookingSearch, 
+  getBookingSeatCount,
+  updateTableNote,
+  clearTableNote
+} from '../firebase';
 import TableMapVisualizer from './TableMapVisualizer';
 
 export default function SeatingArrangementTab({ 
   bookings = [], 
   tablesData = [],
   onUpdateBooking,
-  onAddBooking
+  onAddBooking,
+  onUpdateTableNote
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTableFilter, setSelectedTableFilter] = useState('all');
@@ -31,6 +43,10 @@ export default function SeatingArrangementTab({
   const [movingBooking, setMovingBooking] = useState(null); // { booking, targetTable }
   const [editingTableGuestsBooking, setEditingTableGuestsBooking] = useState(null); // booking
   const [isAddGuestModalOpen, setIsAddGuestModalOpen] = useState(false);
+  const [editingTableNote, setEditingTableNote] = useState(null); // { tableNumber, name, note }
+  const [tableNoteForm, setTableNoteForm] = useState({ name: '', note: '' });
+  const [isSavingTableNote, setIsSavingTableNote] = useState(false);
+
   const [addGuestForm, setAddGuestForm] = useState({
     firstName: '',
     surname: '',
@@ -56,6 +72,13 @@ export default function SeatingArrangementTab({
     const isFull = remainingSeats === 0 || occupiedSeats >= capacity;
     const isFilling = remainingSeats > 0 && remainingSeats <= 3;
 
+    // Retrieve table metadata (custom name & admin note)
+    const tableMeta = (tablesData || []).find(
+      t => t.id === `table_${tableNo}` || Number(t.tableNumber) === tableNo
+    );
+    const tableName = (tableMeta?.tableName || '').trim();
+    const tableNote = (tableMeta?.tableNote || '').trim();
+
     return {
       tableNumber: tableNo,
       capacity,
@@ -65,6 +88,8 @@ export default function SeatingArrangementTab({
       remaining: remainingSeats,
       isFull,
       isFilling,
+      tableName,
+      tableNote,
       bookings: tableBookings
     };
   });
@@ -85,9 +110,54 @@ export default function SeatingArrangementTab({
 
     const term = searchTerm.toLowerCase();
     const tableMatch = `table ${t.tableNumber}`.includes(term) || `table #${t.tableNumber}`.includes(term);
+    const nameMatch = (t.tableName || '').toLowerCase().includes(term);
+    const noteMatch = (t.tableNote || '').toLowerCase().includes(term);
     const guestMatch = (t.bookings || []).some(b => matchBookingSearch(b, searchTerm));
-    return tableMatch || guestMatch;
+    return tableMatch || nameMatch || noteMatch || guestMatch;
   });
+
+  // Handle Save Table Name & Note
+  const handleSaveTableNoteSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingTableNote) return;
+    setIsSavingTableNote(true);
+    const tableNum = Number(editingTableNote.tableNumber);
+    const name = (tableNoteForm.name || '').trim();
+    const note = (tableNoteForm.note || '').trim();
+
+    try {
+      if (onUpdateTableNote) {
+        await onUpdateTableNote(tableNum, { tableName: name, tableNote: note });
+      } else {
+        await updateTableNote(tableNum, { tableName: name, tableNote: note });
+      }
+    } catch (err) {
+      console.error("Failed to save table note:", err);
+    } finally {
+      setIsSavingTableNote(false);
+      setEditingTableNote(null);
+    }
+  };
+
+  // Handle Clear Table Name & Note
+  const handleClearTableNoteSubmit = async () => {
+    if (!editingTableNote) return;
+    setIsSavingTableNote(true);
+    const tableNum = Number(editingTableNote.tableNumber);
+
+    try {
+      if (onUpdateTableNote) {
+        await onUpdateTableNote(tableNum, { tableName: '', tableNote: '' });
+      } else {
+        await clearTableNote(tableNum);
+      }
+    } catch (err) {
+      console.error("Failed to clear table note:", err);
+    } finally {
+      setIsSavingTableNote(false);
+      setEditingTableNote(null);
+    }
+  };
 
   // Handle Move Guest to another table
   const handleConfirmMove = async () => {
@@ -260,12 +330,12 @@ export default function SeatingArrangementTab({
           <select
             value={selectedTableFilter}
             onChange={(e) => setSelectedTableFilter(e.target.value)}
-            className="bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-800 font-bold focus:outline-none focus:border-emerald-600 text-xs"
+            className="bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-800 font-bold focus:outline-none focus:border-emerald-600 text-xs max-w-[260px] truncate"
           >
             <option value="all">All 35 Tables ({totalRemainingSeats} Seats Left)</option>
             {tables.map((t) => (
               <option key={t.tableNumber} value={t.tableNumber}>
-                Table #{t.tableNumber} — {t.isFull ? '🔴 FULL (0 seats left)' : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10 booked)`}
+                Table #{t.tableNumber} {t.tableName ? `— 🏷️ ${t.tableName}` : ''} ({t.isFull ? '🔴 FULL' : `🟢 ${t.remainingSeats} left`})
               </option>
             ))}
           </select>
@@ -297,25 +367,73 @@ export default function SeatingArrangementTab({
           >
             {/* Table Header */}
             <div>
-              <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-                <div>
-                  <span className="font-black text-sm text-slate-900 flex items-center gap-1.5">
-                    <Table className={`w-4 h-4 ${table.isFull ? 'text-rose-600' : table.isFilling ? 'text-amber-600' : 'text-emerald-600'}`} /> 
-                    Table #{table.tableNumber}
-                  </span>
-                  <span className={`text-[11px] font-black ${table.isFull ? 'text-rose-700' : 'text-emerald-700'}`}>
+              <div className="flex items-start justify-between pb-2 border-b border-slate-100">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-black text-sm text-slate-900 flex items-center gap-1.5">
+                      <Table className={`w-4 h-4 ${table.isFull ? 'text-rose-600' : table.isFilling ? 'text-amber-600' : 'text-emerald-600'}`} /> 
+                      Table #{table.tableNumber}
+                    </span>
+                    {/* Edit Table Name / Note Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTableNote({ tableNumber: table.tableNumber, name: table.tableName, note: table.tableNote });
+                        setTableNoteForm({ name: table.tableName || '', note: table.tableNote || '' });
+                      }}
+                      className="p-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 transition cursor-pointer"
+                      title={table.tableName ? "Edit table name & note" : "Add table name / note"}
+                    >
+                      <Tag className="w-3 h-3 text-purple-700" />
+                    </button>
+                  </div>
+
+                  {/* Prominent Table Name / Owner Badge (Admin Only) */}
+                  {table.tableName ? (
+                    <div 
+                      onClick={() => {
+                        setEditingTableNote({ tableNumber: table.tableNumber, name: table.tableName, note: table.tableNote });
+                        setTableNoteForm({ name: table.tableName || '', note: table.tableNote || '' });
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-100/90 hover:bg-purple-200 border border-purple-200 text-purple-950 text-xs font-black cursor-pointer transition max-w-[200px]"
+                      title="Click to edit table name"
+                    >
+                      <Tag className="w-3 h-3 text-purple-700 shrink-0" />
+                      <span className="truncate">{table.tableName}</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTableNote({ tableNumber: table.tableNumber, name: '', note: '' });
+                        setTableNoteForm({ name: '', note: '' });
+                      }}
+                      className="text-[10px] text-purple-700 hover:text-purple-950 font-bold flex items-center gap-1 cursor-pointer transition hover:underline"
+                    >
+                      <span>+ Name table / add note</span>
+                    </button>
+                  )}
+
+                  {/* Internal Admin Note if present and different from name */}
+                  {table.tableNote && table.tableNote !== table.tableName && (
+                    <p className="text-[10px] text-slate-500 italic line-clamp-2">
+                      📝 {table.tableNote}
+                    </p>
+                  )}
+
+                  <span className={`text-[11px] font-black block ${table.isFull ? 'text-rose-700' : 'text-emerald-700'}`}>
                     {table.isFull ? '🔴 Table FULL (0 seats left)' : `🟢 ${table.remainingSeats} of 10 Seats Left`}
                   </span>
                 </div>
 
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs ${
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs shrink-0 ${
                   table.isFull 
                     ? 'bg-rose-100 text-rose-800 border-rose-300' 
                     : table.isFilling
                     ? 'bg-amber-100 text-amber-900 border-amber-300'
                     : 'bg-emerald-100 text-emerald-800 border-emerald-300'
                 }`}>
-                  {table.isFull ? '🔴 FULL' : `${table.remainingSeats} Seats Left`}
+                  {table.isFull ? '🔴 FULL' : `${table.remainingSeats} Left`}
                 </span>
               </div>
 
@@ -733,6 +851,104 @@ export default function SeatingArrangementTab({
                 >
                   Assign to Table #{addGuestForm.tableNumber}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT TABLE NAME & ADMIN NOTE (Admin Only) */}
+      {editingTableNote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="relative w-full max-w-md bg-white rounded-3xl border border-purple-200 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-2xl bg-purple-100 text-purple-800">
+                  <Tag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Name Table #{editingTableNote.tableNumber}</h3>
+                  <p className="text-[11px] text-purple-900 font-semibold">Admin-only note to see who this table belongs to</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setEditingTableNote(null)}
+                className="p-1 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTableNoteSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Table Name / Belongs To:
+                </label>
+                <input
+                  type="text"
+                  value={tableNoteForm.name}
+                  onChange={(e) => setTableNoteForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Charlton Jooste (Host Table), Nicole's Friends, VIP Sponsor"
+                  className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3.5 py-2.5 text-slate-900 text-xs font-semibold focus:outline-none focus:border-purple-600 focus:bg-white transition"
+                  autoFocus
+                />
+                {/* Preset quick buttons */}
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  <span className="text-[10px] text-slate-400 font-medium self-center">Quick Presets:</span>
+                  {["Host Table", "Jooste Family", "Nicole's Friends", "VIP Guests", "Sponsor Table", "Reserved"].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setTableNoteForm(prev => ({ ...prev, name: preset }))}
+                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-purple-100 text-purple-900 text-[10px] font-bold transition cursor-pointer"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Internal Admin Note (Optional):
+                </label>
+                <textarea
+                  rows={2}
+                  value={tableNoteForm.note}
+                  onChange={(e) => setTableNoteForm(prev => ({ ...prev, note: e.target.value }))}
+                  placeholder="e.g. Full table paid cash, needs 2 high chairs, special dietary request..."
+                  className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3.5 py-2 text-slate-900 text-xs font-medium focus:outline-none focus:border-purple-600 focus:bg-white transition"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                {(tableNoteForm.name || tableNoteForm.note || editingTableNote.name || editingTableNote.note) ? (
+                  <button
+                    type="button"
+                    onClick={handleClearTableNoteSubmit}
+                    disabled={isSavingTableNote}
+                    className="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Clear Name & Note
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingTableNote(null)}
+                    className="py-2 px-3.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingTableNote}
+                    className="py-2 px-4 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-black shadow transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Check className="w-3.5 h-3.5" /> {isSavingTableNote ? 'Saving...' : 'Save Table Name'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
