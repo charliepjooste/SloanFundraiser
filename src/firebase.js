@@ -250,13 +250,14 @@ export function generateTicketEmailBody(booking) {
     ? '💝 Direct Donation Supporter (No Table Seat)'
     : `Table #${booking.tableNumber || 1} • ${seatsText} (${booking.tableBookingOption || 'Standard Dance Ticket'})`;
 
-  const isEftPending = booking.paymentStatus === 'pending_eft';
+  const isFree = Boolean(booking.isFreeTicket || booking.paymentStatus === 'complimentary');
+  const isEftPending = !isFree && booking.paymentStatus === 'pending_eft';
 
-  return `💚 THANK YOU FOR YOUR TICKET PURCHASE: SLOAN JOOSTE'S FUNDRAISER DANCE 💚
+  return `💚 ${isFree ? 'OFFICIAL COMPLIMENTARY TICKET PASS' : 'THANK YOU FOR YOUR TICKET PURCHASE'}: SLOAN JOOSTE'S FUNDRAISER DANCE 💚
 
 Dear ${booking.firstName || ''} ${booking.surname || ''},
 
-Thank you for your ticket purchase and generous support in aid of Sloan Jooste's post-op physiotherapy, rehabilitation, and Cerebral Palsy care!
+${isFree ? "You have been allocated an Official Complimentary VIP Ticket Pass for Sloan Jooste's Fundraiser Dance in aid of Sloan's Cerebral Palsy care and rehabilitation!" : "Thank you for your ticket purchase and generous support in aid of Sloan Jooste's post-op physiotherapy, rehabilitation, and Cerebral Palsy care!"}
 
 ==================================================
 🎟️ YOUR RESERVATION DETAILS
@@ -267,11 +268,14 @@ Thank you for your ticket purchase and generous support in aid of Sloan Jooste's
 • Seat Allocation: ${seatsText}
 • Dance Tickets Reserved: ${getBookingSeatCount(booking)} Seat(s)
 • Raffle Tickets: ${booking.raffleTicketsCount || 0} Entry/ies
-• Total Amount: R${booking.amount || 0}
-• Payment Method: ${booking.paymentMethod === 'eft' ? 'Direct EFT Bank Transfer' : 'Instant Transfer'}
-• Status: ${isEftPending ? '⏳ Awaiting EFT Payment & Clearance' : '✅ Confirmed & Paid'}
+• Total Amount: ${isFree ? 'FREE COMPLIMENTARY (R0.00)' : `R${booking.amount || 0}`}
+• Payment Method: ${isFree ? 'Complimentary VIP Pass (No Charge)' : (booking.paymentMethod === 'eft' ? 'Direct EFT Bank Transfer' : 'Instant Transfer')}
+• Status: ${isFree ? '✅ Confirmed & Active (Complimentary Pass)' : (isEftPending ? '⏳ Awaiting EFT Payment & Clearance' : '✅ Confirmed & Paid')}
 
+${isFree ? `==================================================
+📢 ADMISSION NOTICE
 ==================================================
+Your complimentary digital pass with individual QR check-in codes is fully active! Present this pass at the entrance door on the evening of the event.` : isEftPending ? `==================================================
 📢 TICKET DELIVERY & EFT CLEARANCE NOTICE
 ==================================================
 *Once your ticket purchase EFT has been cleared by organizers Charlie or Nicole, your official digital ticket passes with individual QR check-in codes will be sent via WhatsApp and Email!*
@@ -287,7 +291,7 @@ Please make an EFT transfer to:
 • SWIFT/BIC: ${EVENT_DETAILS.banking.swiftCode}
 • Country: ${EVENT_DETAILS.banking.country}
 • Account Type: ${EVENT_DETAILS.banking.accountType}
-• Payment Reference: ${ticketRef} (Important: Please use reference ${ticketRef})
+• Payment Reference: ${ticketRef} (Important: Please use reference ${ticketRef})` : ''}
 
 ==================================================
 📍 EVENT DETAILS & VENUE
@@ -395,8 +399,10 @@ export function generateHtmlTicketEmail(booking) {
         </tr>
         <tr>
           <td style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 10px 12px;">
-            <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b;">Amount Paid</div>
-            <div style="font-size: 14px; font-weight: 900; color: #15803d; margin-top: 2px;">R${booking.amount || 0}</div>
+            <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b;">${(booking.isFreeTicket || booking.paymentStatus === 'complimentary') ? 'Pass Type' : 'Amount Paid'}</div>
+            <div style="font-size: 14px; font-weight: 900; color: ${(booking.isFreeTicket || booking.paymentStatus === 'complimentary') ? '#7e22ce' : '#15803d'}; margin-top: 2px;">
+              ${(booking.isFreeTicket || booking.paymentStatus === 'complimentary') ? 'FREE (Complimentary)' : `R${booking.amount || 0}`}
+            </div>
           </td>
           <td style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 10px 12px;">
             <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b;">Dress Code</div>
@@ -467,7 +473,8 @@ export function generateWhatsAppMessage(booking) {
     ? '💝 Direct Donation'
     : `Table #${booking.tableNumber || 1}`;
 
-  const isEftPending = booking.paymentStatus === 'pending_eft';
+  const isFree = Boolean(booking.isFreeTicket || booking.paymentStatus === 'complimentary');
+  const isEftPending = !isFree && booking.paymentStatus === 'pending_eft';
 
   const message = isEftPending
     ? `*🎟️ EFT BOOKING RECEIVED: SLOAN JOOSTE'S FUNDRAISER DANCE 💚*
@@ -491,15 +498,15 @@ Hello *${booking.firstName} ${booking.surname}*! We received your booking reques
 *Ref:* ${ticketRef}
 
 *Note:* Once cleared by Charlie or Nicole, your official ticket pass with QR code will be activated! 💚`
-    : `*🎟️ TICKET PASS: SLOAN JOOSTE'S FUNDRAISER DANCE 💚*
+    : `*🎟️ ${isFree ? 'OFFICIAL COMPLIMENTARY TICKET PASS' : 'TICKET PASS'}: SLOAN JOOSTE'S FUNDRAISER DANCE 💚*
 
 Hello *${booking.firstName} ${booking.surname}*! Here is your official pass details for Sloan Jooste's Fundraiser Dance:
 
 *• Ticket Reference:* ${ticketRef}
 *• Seating:* ${tableText} (${getBookingSeatCount(booking)} Seat/s)
 *• Raffle Tickets:* ${booking.raffleTicketsCount || 0} Entry/ies
-*• Total Paid:* R${booking.amount || 0}
-*• Status:* ✅ Confirmed & Paid
+*• Total:* ${isFree ? 'FREE COMPLIMENTARY PASS (R0)' : `R${booking.amount || 0} Paid`}
+*• Status:* ${isFree ? '✅ Confirmed Complimentary VIP Pass' : '✅ Confirmed & Paid'}
 
 *📅 Date:* Friday, 09 October 2026 (19:00 - 00:00)
 *🎟️ Raffle Draw:* 21:00 - 21:30
@@ -524,28 +531,44 @@ See you on the dancefloor! 💚`;
 export async function createBookingInFirestore(bookingData) {
   const now = new Date().toISOString();
   const shortRef = `SJ-${Math.floor(1000 + Math.random() * 9000)}`;
-  const isEft = bookingData.paymentMethod === 'eft';
-  const paymentStatus = isEft ? 'pending_eft' : 'paid';
-  
+  const isFree = Boolean(bookingData.isFreeTicket || bookingData.paymentStatus === 'complimentary' || bookingData.paymentMethod === 'complimentary');
+  const isEft = !isFree && bookingData.paymentMethod === 'eft';
+  const paymentStatus = isFree ? 'complimentary' : (isEft ? 'pending_eft' : 'paid');
+  const paymentMethod = isFree ? 'complimentary' : (bookingData.paymentMethod || 'card');
+  const amount = isFree ? 0 : (Number(bookingData.amount) || 0);
+  const donationAmount = isFree ? 0 : (Number(bookingData.donationAmount) || 0);
+
+  const numTickets = bookingData.tableBookingOption === 'Full Private Table (10 Guests)' 
+    ? 10 
+    : (bookingData.tableBookingOption === 'Raffle Tickets Only' || bookingData.tableBookingOption === 'Direct Donation Only') 
+    ? 0 
+    : Number(bookingData.numTickets) || 1;
+
+  let allocatedSeats = bookingData.allocatedSeats || [];
+  if (numTickets > 0 && (!allocatedSeats || allocatedSeats.length === 0)) {
+    allocatedSeats = Array.from({ length: numTickets }, (_, i) => i + 1);
+  }
+
   const newBookingPayload = {
     ticketRef: shortRef,
     firstName: bookingData.firstName || '',
     surname: bookingData.surname || '',
     mobileNumber: bookingData.mobileNumber || '',
     email: (bookingData.email || '').trim().toLowerCase(),
-    numTickets: bookingData.tableBookingOption === 'Full Private Table (10 Guests)' ? 10 : (bookingData.tableBookingOption === 'Raffle Tickets Only' || bookingData.tableBookingOption === 'Direct Donation Only') ? 0 : Number(bookingData.numTickets) || 1,
+    numTickets: numTickets,
     raffleTicketsCount: Number(bookingData.raffleTicketsCount) || 0,
     raffleEntrants: bookingData.raffleEntrants || [],
     tableBookingOption: bookingData.tableBookingOption || 'Standard Dance Ticket',
     tableNumber: Number(bookingData.tableNumber) || 1,
-    allocatedSeats: bookingData.allocatedSeats || [],
+    allocatedSeats: allocatedSeats,
     guestNames: bookingData.guestNames || [],
     specialRequests: bookingData.specialRequests || '',
-    donationAmount: Number(bookingData.donationAmount) || 0,
+    donationAmount: donationAmount,
     consentTerms: Boolean(bookingData.consentTerms),
     paymentStatus: paymentStatus,
-    paymentMethod: bookingData.paymentMethod || 'card',
-    amount: Number(bookingData.amount) || 0,
+    paymentMethod: paymentMethod,
+    amount: amount,
+    isFreeTicket: isFree,
     checkedIn: false,
     checkedInAt: null,
     createdAt: now
@@ -582,12 +605,19 @@ export async function createBookingInFirestore(bookingData) {
 
   // Log confirmation email for guest
   try {
+    let subjectPrefix = 'Ticket Confirmation';
+    if (isFree) {
+      subjectPrefix = 'Complimentary Ticket Pass';
+    } else if (isEft) {
+      subjectPrefix = 'EFT Booking Received';
+    }
+
     await addDoc(emailsCol, {
       ticketId: bookingId,
       ticketRef: shortRef,
       recipientEmail: newBookingPayload.email,
       recipientName: `${newBookingPayload.firstName} ${newBookingPayload.surname}`,
-      subject: `🎟️ ${isEft ? 'EFT Booking Received' : 'Ticket Confirmation'} - Sloan Jooste's Fundraiser Dance (${shortRef})`,
+      subject: `🎟️ ${subjectPrefix} - Sloan Jooste's Fundraiser Dance (${shortRef})`,
       body: generateTicketEmailBody(fullBooking),
       htmlBody: generateHtmlTicketEmail(fullBooking),
       sentAt: now
@@ -686,13 +716,14 @@ export async function approveEftPayment(booking) {
 export async function resendTicketEmail(booking) {
   const now = new Date().toISOString();
   const shortRef = getShortReference(booking);
+  const isFree = Boolean(booking.isFreeTicket || booking.paymentStatus === 'complimentary');
   try {
     await addDoc(emailsCol, {
       ticketId: booking.id,
       ticketRef: shortRef,
       recipientEmail: booking.email,
       recipientName: `${booking.firstName} ${booking.surname}`,
-      subject: `🎟️ [RESENT] Ticket Confirmation - Sloan Jooste's Fundraiser Dance (${shortRef} • Table #${booking.tableNumber})`,
+      subject: `🎟️ [RESENT] ${isFree ? 'Complimentary VIP Pass' : 'Ticket Confirmation'} - Sloan Jooste's Fundraiser Dance (${shortRef}${booking.tableNumber ? ` • Table #${booking.tableNumber}` : ''})`,
       body: generateTicketEmailBody(booking),
       htmlBody: generateHtmlTicketEmail(booking),
       sentAt: now

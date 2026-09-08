@@ -420,9 +420,15 @@ export default function CheckInPortal({ bookings = [], onViewTicketPass }) {
 
                     {/* Column 5: Booking / Payment */}
                     <td className="p-3.5 space-y-1">
-                      <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${pass.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-amber-100 text-amber-900 border-amber-300'}`}>
-                        {pass.paymentStatus === 'paid' ? '✓ Paid' : '⏳ EFT Pending'}
-                      </span>
+                      {pass.rawBooking?.isFreeTicket || pass.paymentStatus === 'complimentary' ? (
+                        <span className="inline-block px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border bg-purple-100 text-purple-900 border-purple-300">
+                          🎁 Complimentary (R0)
+                        </span>
+                      ) : (
+                        <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${pass.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-amber-100 text-amber-900 border-amber-300'}`}>
+                          {pass.paymentStatus === 'paid' ? '✓ Paid' : '⏳ EFT Pending'}
+                        </span>
+                      )}
                       <span className="text-[10px] text-slate-500 font-bold block">
                         Ref: {pass.baseRef}
                       </span>

@@ -36,8 +36,9 @@ async function drawSingleTicketPage(pdf, booking, itemData) {
 
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
+  const isFree = Boolean(booking.isFreeTicket || booking.paymentStatus === 'complimentary');
   pdf.setTextColor(isRafflePass ? 243 : 167, isRafflePass ? 232 : 243, isRafflePass ? 255 : 208);
-  pdf.text(isRafflePass ? "Official Charity Raffle Entry Pass (7 Prizes)" : `Official Admission Pass • ${itemData.label || 'Standard Seat'}`, cardX + cardWidth / 2, currentY + 17, { align: 'center' });
+  pdf.text(isRafflePass ? "Official Charity Raffle Entry Pass (7 Prizes)" : isFree ? `Official Complimentary VIP Pass • ${itemData.label || 'Standard Seat'}` : `Official Admission Pass • ${itemData.label || 'Standard Seat'}`, cardX + cardWidth / 2, currentY + 17, { align: 'center' });
 
   currentY += 32;
 
@@ -159,6 +160,8 @@ async function drawSingleTicketPage(pdf, booking, itemData) {
     ? 'Charity Raffle Pass' 
     : isDonationPass 
     ? 'Direct Donation' 
+    : isFree
+    ? `Complimentary (${itemData.label || 'VIP'})`
     : (itemData.label || '1 Dance Ticket Seat');
   pdf.text(passTypeText, col2X + 4, currentY + 9.5);
 

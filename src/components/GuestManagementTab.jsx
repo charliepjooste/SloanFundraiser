@@ -64,6 +64,7 @@ export default function GuestManagementTab({
   // Modals
   const [editingGuest, setEditingGuest] = useState(null);
   const [isAddGuestModalOpen, setIsAddGuestModalOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'complimentary' | 'paid' | 'pending_eft'
   const [addForm, setAddForm] = useState({
     firstName: '',
     surname: '',
@@ -73,7 +74,8 @@ export default function GuestManagementTab({
     numTickets: 1,
     raffleTicketsCount: 0,
     raffleEntrants: [],
-    tableBookingOption: 'Standard Dance Ticket'
+    tableBookingOption: 'Standard Dance Ticket',
+    isFreeTicket: false
   });
 
   // Filter bookings using universal search matcher
@@ -83,6 +85,10 @@ export default function GuestManagementTab({
     if (tableFilter !== 'all' && Number(b.tableNumber) !== Number(tableFilter)) return false;
     if (raffleFilter === 'hasRaffle' && (Number(b.raffleTicketsCount) || 0) === 0) return false;
     if (raffleFilter === 'noRaffle' && (Number(b.raffleTicketsCount) || 0) > 0) return false;
+
+    if (statusFilter === 'complimentary' && !(b.isFreeTicket || b.paymentStatus === 'complimentary')) return false;
+    if (statusFilter === 'paid' && (b.paymentStatus === 'pending_eft' || b.isFreeTicket || b.paymentStatus === 'complimentary')) return false;
+    if (statusFilter === 'pending_eft' && b.paymentStatus !== 'pending_eft') return false;
 
     return matchesSearch;
   });
@@ -118,6 +124,7 @@ export default function GuestManagementTab({
 
   // Open Edit Modal and initialize raffleEntrants array
   const handleOpenEdit = (guest) => {
+    const isFree = Boolean(guest.isFreeTicket || guest.paymentStatus === 'complimentary');
     const count = Number(guest.raffleTicketsCount) || 0;
     let entrants = guest.raffleEntrants ? [...guest.raffleEntrants] : [];
     
@@ -133,6 +140,7 @@ export default function GuestManagementTab({
 
     setEditingGuest({
       ...guest,
+      isFreeTicket: isFree,
       raffleTicketsCount: count,
       raffleEntrants: entrants
     });
@@ -143,6 +151,7 @@ export default function GuestManagementTab({
     e.preventDefault();
     if (!editingGuest) return;
 
+    const isFree = Boolean(editingGuest.isFreeTicket);
     const updatedData = {
       firstName: editingGuest.firstName,
       surname: editingGuest.surname,
@@ -152,7 +161,11 @@ export default function GuestManagementTab({
       numTickets: Number(editingGuest.numTickets) || 0,
       raffleTicketsCount: Number(editingGuest.raffleTicketsCount) || 0,
       raffleEntrants: editingGuest.raffleEntrants || [],
-      specialRequests: editingGuest.specialRequests || ''
+      specialRequests: editingGuest.specialRequests || '',
+      isFreeTicket: isFree,
+      paymentStatus: isFree ? 'complimentary' : (editingGuest.paymentStatus === 'complimentary' ? 'paid' : (editingGuest.paymentStatus || 'paid')),
+      paymentMethod: isFree ? 'complimentary' : (editingGuest.paymentMethod === 'complimentary' ? 'manual' : (editingGuest.paymentMethod || 'manual')),
+      amount: isFree ? 0 : (editingGuest.amount === 0 ? (editingGuest.tableBookingOption === 'Full Private Table (10 Guests)' ? 1500 : 150 * (Number(editingGuest.numTickets) || 1)) : Number(editingGuest.amount) || 0)
     };
 
     if (onUpdateBooking) {
@@ -236,18 +249,48 @@ export default function GuestManagementTab({
   const handleAddNewGuestSubmit = async (e) => {
     e.preventDefault();
     try {
+      const isFree = Boolean(addForm.isFreeTicket);
       const raffleCount = Number(addForm.raffleTicketsCount) || 0;
       let entrants = addForm.raffleEntrants || [];
       if (raffleCount > 0 && entrants.length === 0) {
         entrants = [{ name: `${addForm.firstName} ${addForm.surname}`, tableNumber: addForm.tableNumber }];
       }
 
+      // Compute sequential open seats on selected table
+      const requestedTickets = Number(addForm.numTickets) || 1;
+      const finalTableNumber = Number(addForm.tableNumber) || 1;
+      const existingTableBookings = (bookings || []).filter(b => Number(b.tableNumber) === finalTableNumber && getBookingSeatCount(b) > 0);
+      const claimedSeats = new Set();
+      existingTableBookings.forEach(b => {
+        if (b.allocatedSeats && Array.isArray(b.allocatedSeats) && b.allocatedSeats.length > 0) {
+          b.allocatedSeats.forEach(s => claimedSeats.add(Number(s)));
+        } else {
+          const count = getBookingSeatCount(b);
+          for (let i = 1; i <= count; i++) claimedSeats.add(i);
+        }
+      });
+      const finalAllocatedSeats = [];
+      for (let seat = 1; seat <= 10; seat++) {
+        if (!claimedSeats.has(seat) && finalAllocatedSeats.length < requestedTickets) {
+          finalAllocatedSeats.push(seat);
+        }
+      }
+      while (finalAllocatedSeats.length < requestedTickets) {
+        finalAllocatedSeats.push(finalAllocatedSeats.length + 1);
+      }
+
+      const calculatedAmount = isFree 
+        ? 0 
+        : (addForm.tableBookingOption === 'Full Private Table (10 Guests)' ? 1500 : 150 * requestedTickets) + (raffleCount === 1 ? 50 : raffleCount === 3 ? 100 : raffleCount * 50);
+
       const payload = {
         ...addForm,
+        isFreeTicket: isFree,
+        allocatedSeats: finalAllocatedSeats,
         raffleEntrants: entrants,
-        amount: (addForm.tableBookingOption === 'Full Private Table (10 Guests)' ? 1500 : 150 * Number(addForm.numTickets)) + (raffleCount === 1 ? 50 : raffleCount === 3 ? 100 : raffleCount * 50),
-        paymentStatus: 'paid',
-        paymentMethod: 'manual',
+        amount: calculatedAmount,
+        paymentStatus: isFree ? 'complimentary' : 'paid',
+        paymentMethod: isFree ? 'complimentary' : 'manual',
         consentTerms: true
       };
 
@@ -266,7 +309,8 @@ export default function GuestManagementTab({
         numTickets: 1,
         raffleTicketsCount: 0,
         raffleEntrants: [],
-        tableBookingOption: 'Standard Dance Ticket'
+        tableBookingOption: 'Standard Dance Ticket',
+        isFreeTicket: false
       });
     } catch (err) {
       console.error("Failed to add guest:", err);
@@ -303,17 +347,54 @@ export default function GuestManagementTab({
           <span className="text-xs text-emerald-800/80 font-semibold">1 Ticket = 1 Wheel Slice (R50/1, R100/3)</span>
         </div>
 
-        <div className="p-5 rounded-3xl bg-white border border-purple-200 shadow-sm flex items-center justify-between">
+        <div className="p-5 rounded-3xl bg-white border border-purple-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <span className="text-xs font-bold text-purple-900 block">Fast Guest Action</span>
             <span className="text-sm font-black text-slate-900">Add Guest & Send Pass</span>
           </div>
-          <button
-            onClick={() => setIsAddGuestModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 hover:brightness-110 transition"
-          >
-            <Plus className="w-4 h-4" /> Add Guest
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => {
+                setAddForm({
+                  firstName: '',
+                  surname: '',
+                  email: '',
+                  mobileNumber: '',
+                  tableNumber: 1,
+                  numTickets: 1,
+                  raffleTicketsCount: 0,
+                  raffleEntrants: [],
+                  tableBookingOption: 'Standard Dance Ticket',
+                  isFreeTicket: false
+                });
+                setIsAddGuestModalOpen(true);
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 hover:brightness-110 transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Add Guest
+            </button>
+            <button
+              onClick={() => {
+                setAddForm({
+                  firstName: '',
+                  surname: '',
+                  email: '',
+                  mobileNumber: '',
+                  tableNumber: 1,
+                  numTickets: 1,
+                  raffleTicketsCount: 0,
+                  raffleEntrants: [],
+                  tableBookingOption: 'Standard Dance Ticket',
+                  isFreeTicket: true
+                });
+                setIsAddGuestModalOpen(true);
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-purple-700 to-indigo-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-purple-700/20 hover:brightness-110 transition cursor-pointer"
+              title="Allocate a complimentary VIP ticket (Zero Rand value, uninflated total)"
+            >
+              <Gift className="w-4 h-4" /> 🎁 Free Ticket
+            </button>
+          </div>
         </div>
       </div>
 
@@ -363,9 +444,37 @@ export default function GuestManagementTab({
             </select>
           </div>
 
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-purple-200 rounded-xl px-3 py-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-transparent text-slate-900 font-semibold focus:outline-none text-xs"
+            >
+              <option value="all">All Payment Status</option>
+              <option value="complimentary">🎁 Free Complimentary (R0)</option>
+              <option value="paid">✓ Paid Tickets</option>
+              <option value="pending_eft">⏳ Awaiting EFT Clearance</option>
+            </select>
+          </div>
+
           <button
-            onClick={() => setIsAddGuestModalOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1 shadow-sm ml-auto md:ml-0 hover:bg-emerald-700 transition"
+            onClick={() => {
+              setAddForm({
+                firstName: '',
+                surname: '',
+                email: '',
+                mobileNumber: '',
+                tableNumber: 1,
+                numTickets: 1,
+                raffleTicketsCount: 0,
+                raffleEntrants: [],
+                tableBookingOption: 'Standard Dance Ticket',
+                isFreeTicket: false
+              });
+              setIsAddGuestModalOpen(true);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1 shadow-sm ml-auto md:ml-0 hover:bg-emerald-700 transition cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" /> New Guest
           </button>
@@ -520,26 +629,39 @@ export default function GuestManagementTab({
 
                   {/* Amount Paid & Payment Status */}
                   <td className="p-3.5">
-                    <span className="font-black text-emerald-700 text-sm">
-                      R{b.amount}
-                    </span>
-                    {b.paymentStatus === 'pending_eft' ? (
-                      <div className="mt-1 space-y-1">
-                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300">
-                          ⏳ EFT Pending
+                    {b.isFreeTicket || b.paymentStatus === 'complimentary' ? (
+                      <div>
+                        <span className="font-black text-purple-700 text-sm">
+                          FREE
                         </span>
-                        <button
-                          onClick={() => handleApproveEft(b)}
-                          className="block w-full py-1 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] shadow-sm transition"
-                          title="Click to clear bank funds and officially issue ticket pass"
-                        >
-                          ✓ Clear Funds
-                        </button>
+                        <span className="block mt-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300">
+                          🎁 Complimentary
+                        </span>
                       </div>
                     ) : (
-                      <span className="block text-[10px] text-emerald-700 uppercase font-black">
-                        ✓ {b.paymentMethod === 'card' ? 'Card Paid' : 'Paid & Active'}
-                      </span>
+                      <>
+                        <span className="font-black text-emerald-700 text-sm">
+                          R{b.amount}
+                        </span>
+                        {b.paymentStatus === 'pending_eft' ? (
+                          <div className="mt-1 space-y-1">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300">
+                              ⏳ EFT Pending
+                            </span>
+                            <button
+                              onClick={() => handleApproveEft(b)}
+                              className="block w-full py-1 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] shadow-sm transition cursor-pointer"
+                              title="Click to clear bank funds and officially issue ticket pass"
+                            >
+                              ✓ Clear Funds
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="block text-[10px] text-emerald-700 uppercase font-black">
+                            ✓ {b.paymentMethod === 'card' ? 'Card Paid' : 'Paid & Active'}
+                          </span>
+                        )}
+                      </>
                     )}
                   </td>
 
@@ -640,6 +762,25 @@ export default function GuestManagementTab({
 
             <form onSubmit={handleSaveEdit} className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
               
+              {/* Ticket Type Toggle (Paid vs Complimentary) */}
+              <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-black text-purple-950 block">Complimentary VIP Pass</span>
+                  <span className="text-[11px] text-purple-800 font-medium">Toggle if this is an official free guest pass (R0.00 value)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingGuest({ ...editingGuest, isFreeTicket: !editingGuest.isFreeTicket })}
+                  className={`px-3.5 py-1.5 rounded-xl font-bold text-xs transition border cursor-pointer ${
+                    editingGuest.isFreeTicket 
+                      ? 'bg-purple-700 border-purple-700 text-white shadow-sm' 
+                      : 'bg-white border-purple-300 text-purple-900 hover:bg-purple-100'
+                  }`}
+                >
+                  {editingGuest.isFreeTicket ? '🎁 Complimentary (Free)' : 'Standard Paid'}
+                </button>
+              </div>
+
               {/* Contact Details */}
               <div className="space-y-3">
                 <span className="text-xs font-black text-purple-900 uppercase tracking-wider block">1. Guest Contact Information</span>
@@ -858,18 +999,59 @@ export default function GuestManagementTab({
           <div className="relative w-full max-w-md glass-modal rounded-3xl overflow-hidden border border-purple-200 shadow-2xl p-6 space-y-4 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-emerald-600" />
-                Add New Guest & Raffle Tickets (35 Tables)
+                {addForm.isFreeTicket ? <Gift className="w-5 h-5 text-purple-700" /> : <Plus className="w-5 h-5 text-emerald-600" />}
+                {addForm.isFreeTicket ? 'Allocate Free Complimentary VIP Ticket' : 'Add New Guest & Raffle Tickets (35 Tables)'}
               </h3>
               <button 
                 onClick={() => setIsAddGuestModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-700"
+                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleAddNewGuestSubmit} className="space-y-3 text-xs">
+              
+              {/* Ticket Type Toggle */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl border border-purple-100">
+                <button
+                  type="button"
+                  onClick={() => setAddForm(prev => ({ ...prev, isFreeTicket: false }))}
+                  className={`py-2 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    !addForm.isFreeTicket 
+                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Ticket className="w-3.5 h-3.5 text-emerald-600" />
+                  Standard Paid Ticket
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddForm(prev => ({ ...prev, isFreeTicket: true }))}
+                  className={`py-2 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    addForm.isFreeTicket 
+                      ? 'bg-purple-700 text-white shadow-sm' 
+                      : 'text-purple-900 hover:bg-purple-100'
+                  }`}
+                >
+                  <Gift className="w-3.5 h-3.5" />
+                  🎁 Free Ticket (R0)
+                </button>
+              </div>
+
+              {addForm.isFreeTicket && (
+                <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200 text-purple-950 text-xs font-semibold space-y-1">
+                  <div className="flex items-center gap-1.5 font-black text-purple-900">
+                    <Gift className="w-4 h-4 text-purple-700 shrink-0" />
+                    <span>Official Complimentary VIP Ticket Pass</span>
+                  </div>
+                  <p className="text-[11px] text-purple-800">
+                    • <strong>Zero Rand Value (R0.00):</strong> Will NOT count towards fundraiser target total.<br/>
+                    • <strong>Full Ticketing Features:</strong> Table seat allocation, unique reference code (<code className="font-mono text-[10px] bg-purple-100 px-1 py-0.5 rounded">SJ-XXXX</code>), individual QR passes, and email/WhatsApp dispatch.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-purple-900 font-bold mb-1">First Name *</label>
@@ -991,9 +1173,15 @@ export default function GuestManagementTab({
                     const selectedT = tables.find(t => t.tableNumber === Number(addForm.tableNumber));
                     return selectedT && selectedT.remainingSeats < Number(addForm.numTickets);
                   })()}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-extrabold text-xs shadow-md hover:bg-emerald-700 transition disabled:opacity-40 cursor-pointer"
+                  className={`px-5 py-2 rounded-xl text-white font-extrabold text-xs shadow-md transition disabled:opacity-40 cursor-pointer ${
+                    addForm.isFreeTicket 
+                      ? 'bg-purple-700 hover:bg-purple-800' 
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
                 >
-                  Add to Table #{addForm.tableNumber}
+                  {addForm.isFreeTicket 
+                    ? `Allocate Free Complimentary Pass (R0)` 
+                    : `Add to Table #${addForm.tableNumber}`}
                 </button>
               </div>
             </form>

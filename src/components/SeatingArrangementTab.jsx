@@ -54,7 +54,8 @@ export default function SeatingArrangementTab({
     mobileNumber: '',
     tableNumber: 1,
     numTickets: 1,
-    tableBookingOption: 'Standard Dance Ticket'
+    tableBookingOption: 'Standard Dance Ticket',
+    isFreeTicket: false
   });
 
   // 35 Tables Setup with complete occupancy and availability calculations
@@ -202,11 +203,42 @@ export default function SeatingArrangementTab({
   const handleAddManualGuest = async (e) => {
     e.preventDefault();
     try {
+      const isFree = Boolean(addGuestForm.isFreeTicket);
+      const requestedTickets = Number(addGuestForm.numTickets) || 1;
+      const finalTableNumber = Number(addGuestForm.tableNumber) || 1;
+
+      // Compute sequential open seats on selected table
+      const existingTableBookings = (bookings || []).filter(b => Number(b.tableNumber) === finalTableNumber && getBookingSeatCount(b) > 0);
+      const claimedSeats = new Set();
+      existingTableBookings.forEach(b => {
+        if (b.allocatedSeats && Array.isArray(b.allocatedSeats) && b.allocatedSeats.length > 0) {
+          b.allocatedSeats.forEach(s => claimedSeats.add(Number(s)));
+        } else {
+          const count = getBookingSeatCount(b);
+          for (let i = 1; i <= count; i++) claimedSeats.add(i);
+        }
+      });
+      const finalAllocatedSeats = [];
+      for (let seat = 1; seat <= 10; seat++) {
+        if (!claimedSeats.has(seat) && finalAllocatedSeats.length < requestedTickets) {
+          finalAllocatedSeats.push(seat);
+        }
+      }
+      while (finalAllocatedSeats.length < requestedTickets) {
+        finalAllocatedSeats.push(finalAllocatedSeats.length + 1);
+      }
+
+      const calculatedAmount = isFree 
+        ? 0 
+        : (addGuestForm.tableBookingOption === 'Full Private Table (10 Guests)' ? 1500 : 150 * requestedTickets);
+
       const payload = {
         ...addGuestForm,
-        amount: addGuestForm.tableBookingOption === 'Full Private Table (10 Guests)' ? 1500 : 150 * Number(addGuestForm.numTickets),
-        paymentStatus: 'paid',
-        paymentMethod: 'manual',
+        isFreeTicket: isFree,
+        allocatedSeats: finalAllocatedSeats,
+        amount: calculatedAmount,
+        paymentStatus: isFree ? 'complimentary' : 'paid',
+        paymentMethod: isFree ? 'complimentary' : 'manual',
         consentTerms: true
       };
       const created = await createBookingInFirestore(payload);
@@ -222,7 +254,8 @@ export default function SeatingArrangementTab({
         mobileNumber: '',
         tableNumber: 1,
         numTickets: 1,
-        tableBookingOption: 'Standard Dance Ticket'
+        tableBookingOption: 'Standard Dance Ticket',
+        isFreeTicket: false
       });
     } catch (err) {
       console.error("Failed to add manual guest:", err);
@@ -474,9 +507,16 @@ export default function SeatingArrangementTab({
                     >
                       <div className="flex items-start justify-between gap-1">
                         <div>
-                          <span className="font-bold text-slate-900 block text-xs">
-                            {b.firstName} {b.surname}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-900 block text-xs">
+                              {b.firstName} {b.surname}
+                            </span>
+                            {(b.isFreeTicket || b.paymentStatus === 'complimentary') && (
+                              <span className="px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-900 font-extrabold text-[9px] border border-purple-300">
+                                🎁 Free / VIP
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] text-emerald-700 font-bold">
                             {b.tableBookingOption === 'Full Private Table (10 Guests)' ? '👑 Full Table (10 Seats)' : `${getBookingSeatCount(b)} Seat${getBookingSeatCount(b) > 1 ? 's' : ''}`}
                             {b.allocatedSeats && b.allocatedSeats.length > 0 && ` • Seat(s) #${b.allocatedSeats.join(', ')}`}
@@ -718,8 +758,8 @@ export default function SeatingArrangementTab({
           <div className="relative w-full max-w-md glass-modal rounded-3xl overflow-hidden border border-purple-200 shadow-2xl p-6 space-y-4 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <UserPlus className="w-4 h-4 text-emerald-600" />
-                Add Seated Guest Manually (35 Tables)
+                {addGuestForm.isFreeTicket ? <Gift className="w-4 h-4 text-purple-700" /> : <UserPlus className="w-4 h-4 text-emerald-600" />}
+                {addGuestForm.isFreeTicket ? 'Allocate Free Complimentary Pass (35 Tables)' : 'Add Seated Guest Manually (35 Tables)'}
               </h3>
               <button 
                 onClick={() => setIsAddGuestModalOpen(false)}
@@ -730,6 +770,46 @@ export default function SeatingArrangementTab({
             </div>
 
             <form onSubmit={handleAddManualGuest} className="space-y-3 text-xs">
+              
+              {/* Ticket Type Toggle */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl border border-purple-100">
+                <button
+                  type="button"
+                  onClick={() => setAddGuestForm(prev => ({ ...prev, isFreeTicket: false }))}
+                  className={`py-1.5 px-2.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    !addGuestForm.isFreeTicket 
+                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Ticket className="w-3.5 h-3.5 text-emerald-600" />
+                  Standard Paid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddGuestForm(prev => ({ ...prev, isFreeTicket: true }))}
+                  className={`py-1.5 px-2.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    addGuestForm.isFreeTicket 
+                      ? 'bg-purple-700 text-white shadow-sm' 
+                      : 'text-purple-900 hover:bg-purple-100'
+                  }`}
+                >
+                  <Gift className="w-3.5 h-3.5" />
+                  🎁 Free Pass (R0)
+                </button>
+              </div>
+
+              {addGuestForm.isFreeTicket && (
+                <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 text-[11px] font-semibold space-y-0.5">
+                  <div className="flex items-center gap-1 font-black text-purple-900">
+                    <Gift className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+                    <span>Complimentary VIP Guest Pass</span>
+                  </div>
+                  <p className="text-purple-800 text-[10px]">
+                    Zero Rand value (R0.00) • Reserves physical table seat(s) without increasing target goal.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-purple-900 font-bold mb-1">First Name *</label>
@@ -847,9 +927,15 @@ export default function SeatingArrangementTab({
                     const selectedT = tables.find(t => t.tableNumber === Number(addGuestForm.tableNumber));
                     return selectedT && selectedT.remainingSeats < Number(addGuestForm.numTickets);
                   })()}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-extrabold text-xs shadow-md hover:bg-emerald-700 transition disabled:opacity-40 cursor-pointer"
+                  className={`px-4 py-2 rounded-xl text-white font-extrabold text-xs shadow-md transition disabled:opacity-40 cursor-pointer ${
+                    addGuestForm.isFreeTicket 
+                      ? 'bg-purple-700 hover:bg-purple-800' 
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
                 >
-                  Assign to Table #{addGuestForm.tableNumber}
+                  {addGuestForm.isFreeTicket 
+                    ? `Assign Complimentary Pass to Table #${addGuestForm.tableNumber}` 
+                    : `Assign to Table #${addGuestForm.tableNumber}`}
                 </button>
               </div>
             </form>

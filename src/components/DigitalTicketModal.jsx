@@ -237,9 +237,16 @@ export default function DigitalTicketModal({ booking, onClose }) {
         <div className="p-6 space-y-4 overflow-y-auto text-slate-800 text-center">
           
           {/* Badge */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs border border-emerald-300">
-            <CheckCircle className="w-3.5 h-3.5 text-emerald-700" />
-            <span>{activePass.fullLabel}</span>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs border border-emerald-300">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-700" />
+              <span>{activePass.fullLabel}</span>
+            </div>
+            {(booking.isFreeTicket || booking.paymentStatus === 'complimentary') && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-100 text-purple-900 font-extrabold text-xs border border-purple-300">
+                🎁 Official Complimentary Pass (Free)
+              </span>
+            )}
           </div>
 
           {/* Attendee Name & Pass Reference */}

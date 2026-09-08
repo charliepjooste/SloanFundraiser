@@ -310,7 +310,8 @@ export default function MyTicketsModal({
                 <div className="grid grid-cols-1 gap-4">
                   {userBookings.map((b) => {
                     const ticketRef = getShortReference(b);
-                    const isEftPending = b.paymentStatus === 'pending_eft';
+                    const isFree = Boolean(b.isFreeTicket || b.paymentStatus === 'complimentary');
+                    const isEftPending = !isFree && b.paymentStatus === 'pending_eft';
                     const isRaffleOnly = b.tableBookingOption === 'Raffle Tickets Only';
                     const isDonationOnly = b.tableBookingOption === 'Direct Donation Only';
 
@@ -376,7 +377,11 @@ export default function MyTicketsModal({
                           </div>
 
                           <div className="flex items-center gap-1.5">
-                            {isEftPending ? (
+                            {isFree ? (
+                              <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-900 font-black text-xs border border-purple-300">
+                                🎁 Complimentary (Free)
+                              </span>
+                            ) : isEftPending ? (
                               <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-black text-xs border border-amber-300">
                                 ⏳ Pending EFT Clearance
                               </span>
