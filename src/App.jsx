@@ -130,7 +130,9 @@ export default function App() {
     }
   });
   const fullTablesCount = Object.values(tableOccupancyMap).filter(seats => seats >= 10).length;
-  const availableTablesCount = Math.max(0, 35 - fullTablesCount);
+  // Only tables with all 10 seats free (0 occupied) are considered available full tables for guests.
+  // If a table has even 1 person sitting at it, it is not a full available table and is removed from this count.
+  const availableTablesCount = Object.values(tableOccupancyMap).filter(seats => seats === 0).length;
   const totalSeatsRemaining = Math.max(0, 350 - totalTicketsSold);
 
   // Post-booking toast state
@@ -746,7 +748,7 @@ export default function App() {
                 </div>
                 <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200">
                   <Table className="w-4 h-4 text-purple-700 mx-auto mb-1" />
-                  <span className="font-black text-purple-950 block">{availableTablesCount} Open</span>
+                  <span className="font-black text-purple-950 block">{availableTablesCount} Full Tables</span>
                   <span className="text-[10px] text-purple-900 font-semibold">{totalSeatsRemaining} Seats Left</span>
                 </div>
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">

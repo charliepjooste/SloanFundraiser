@@ -78,13 +78,28 @@ export default function BookingWizard({
     }
   });
 
-  // Find 100% free tables (0 out of 10 seats booked)
+  // Find 100% free tables (0 out of 10 seats booked - strictly all 10 seats free)
+  // If a table has even 1 person sitting at it, it is removed from the full available table listing
   const completelyFreeTables = Object.keys(tableOccupancy)
     .map(Number)
-    .filter(t => tableOccupancy[t] === 0);
+    .filter(t => (tableOccupancy[t] || 0) === 0);
 
-  // Automatically find next available table for individual tickets
+  // Tables that have enough open seats to accommodate the requested number of tickets
+  const tablesWithOpenSeats = Object.keys(tableOccupancy)
+    .map(Number)
+    .filter(t => 10 - (tableOccupancy[t] || 0) >= (Number(numTickets) || 1));
+
+  // Automatically find next available table for individual tickets / bookings less than a full table
   const findAutoAssignedTable = (requestedSeats) => {
+    // 1. Prioritize tables that already have guests seated (partially occupied) and have enough open seats.
+    // This slots individual / partial bookings into existing open seats first, keeping 10-seater empty tables 100% free!
+    for (let t = 1; t <= 35; t++) {
+      const booked = tableOccupancy[t] || 0;
+      if (booked > 0 && 10 - booked >= requestedSeats) {
+        return t;
+      }
+    }
+    // 2. If no partially occupied table has enough open seats, allocate the first completely free table
     for (let t = 1; t <= 35; t++) {
       const booked = tableOccupancy[t] || 0;
       if (10 - booked >= requestedSeats) {
@@ -98,12 +113,17 @@ export default function BookingWizard({
   useEffect(() => {
     if (tableBookingOption === 'Full Private Table (10 Guests)') {
       if (completelyFreeTables.length > 0) {
-        setTableNumber(completelyFreeTables[0]);
+        if (!completelyFreeTables.includes(Number(tableNumber))) {
+          setTableNumber(completelyFreeTables[0]);
+        }
       } else {
         setTableNumber(0);
       }
     } else if (tableBookingOption === 'Standard Dance Ticket') {
-      setTableNumber(findAutoAssignedTable(numTickets));
+      const currentBooked = tableOccupancy[tableNumber] || 0;
+      if (!tableNumber || 10 - currentBooked < numTickets) {
+        setTableNumber(findAutoAssignedTable(numTickets));
+      }
     }
   }, [tableBookingOption, numTickets, bookings]);
 
@@ -233,12 +253,20 @@ export default function BookingWizard({
         tableNumber: Number(ent?.tableNumber) || Number(tableNumber) || 1
       }));
 
-      // Auto-assign table if individual ticket
+      // Auto-assign table if individual ticket / verify capacity
       let finalTableNumber = Number(tableNumber) || 1;
       if (tableBookingOption === 'Raffle Tickets Only') {
         finalTableNumber = 0;
       } else if (tableBookingOption === 'Standard Dance Ticket') {
-        finalTableNumber = findAutoAssignedTable(numTickets);
+        const currentBooked = tableOccupancy[finalTableNumber] || 0;
+        if (10 - currentBooked < numTickets) {
+          finalTableNumber = findAutoAssignedTable(numTickets);
+        }
+      } else if (tableBookingOption === 'Full Private Table (10 Guests)') {
+        // Enforce that private table must be a 100% free table (10 seats free)
+        if (!completelyFreeTables.includes(finalTableNumber)) {
+          finalTableNumber = completelyFreeTables[0] || 1;
+        }
       }
 
       // Compute sequential seats allocation for the chosen table
@@ -536,7 +564,7 @@ export default function BookingWizard({
                           <span className="font-extrabold text-sm text-slate-900">Standard Dance Ticket</span>
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black">R150 / Seat</span>
                         </div>
-                        <p className="text-xs text-slate-500">Full admission & live entertainment. Open table seating is automatically allocated.</p>
+                        <p className="text-xs text-slate-500">Full admission & live entertainment. Guests are slotted into open seats across tables.</p>
                       </div>
                       <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center border-emerald-600">
                         {tableBookingOption === 'Standard Dance Ticket' && <div className="w-2.5 h-2.5 rounded-full bg-emerald-600"></div>}
@@ -545,8 +573,12 @@ export default function BookingWizard({
 
                     {/* Option 2: Full Private Table */}
                     <div 
-                      onClick={() => setTableBookingOption('Full Private Table (10 Guests)')}
-                      className={`p-4 rounded-2xl border cursor-pointer transition flex items-center justify-between ${tableBookingOption === 'Full Private Table (10 Guests)' ? 'border-2 border-emerald-600 bg-emerald-50/70 shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                      onClick={() => {
+                        if (completelyFreeTables.length > 0) {
+                          setTableBookingOption('Full Private Table (10 Guests)');
+                        }
+                      }}
+                      className={`p-4 rounded-2xl border transition flex items-center justify-between ${completelyFreeTables.length === 0 ? 'opacity-60 cursor-not-allowed bg-slate-100 border-slate-200' : tableBookingOption === 'Full Private Table (10 Guests)' ? 'border-2 border-emerald-600 bg-emerald-50/70 shadow-sm cursor-pointer' : 'border-slate-200 bg-white hover:bg-slate-50 cursor-pointer'}`}
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -554,7 +586,9 @@ export default function BookingWizard({
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 font-black">R1,500 / Table</span>
                         </div>
                         <p className="text-xs text-slate-500">
-                          Reserve a full 10-seater table. Choose from {completelyFreeTables.length} available 100% free tables.
+                          {completelyFreeTables.length > 0
+                            ? `Reserve a full 10-seater table. Choose from ${completelyFreeTables.length} available table${completelyFreeTables.length !== 1 ? 's' : ''} (all 10 seats free).`
+                            : 'All full tables currently have guests seated. Individual seats can still be booked above.'}
                         </p>
                       </div>
                       <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center border-emerald-600">
@@ -586,22 +620,57 @@ export default function BookingWizard({
 
                   {/* Quantity selector for Standard Dance Tickets */}
                   {tableBookingOption === 'Standard Dance Ticket' && (
-                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-200 space-y-2">
-                      <label className="block font-bold text-xs text-slate-800">
-                        How many dance tickets would you like to purchase?
-                      </label>
-                      <div className="flex items-center gap-3">
-                        <input 
-                          type="range" 
-                          min="1" 
-                          max="9" 
-                          value={numTickets}
-                          onChange={(e) => setNumTickets(Number(e.target.value))}
-                          className="flex-1 accent-emerald-600 cursor-pointer"
-                        />
-                        <span className="font-black text-sm text-purple-950 bg-white px-3 py-1 rounded-xl border border-purple-200 shadow-2xs">
-                          {numTickets} {numTickets === 1 ? 'Seat' : 'Seats'} (R{numTickets * 150})
-                        </span>
+                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-200 space-y-3">
+                      <div>
+                        <label className="block font-bold text-xs text-slate-800 mb-1">
+                          How many dance tickets would you like to purchase?
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <input 
+                            type="range" 
+                            min="1" 
+                            max="9" 
+                            value={numTickets}
+                            onChange={(e) => setNumTickets(Number(e.target.value))}
+                            className="flex-1 accent-emerald-600 cursor-pointer"
+                          />
+                          <span className="font-black text-sm text-purple-950 bg-white px-3 py-1 rounded-xl border border-purple-200 shadow-2xs">
+                            {numTickets} {numTickets === 1 ? 'Seat' : 'Seats'} (R{numTickets * 150})
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Open Seat Slotted Allocation Helper */}
+                      <div className="p-3 rounded-xl bg-emerald-50/90 border border-emerald-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <span className="font-black text-emerald-950 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Slotted Seating: Table #{tableNumber}
+                          </span>
+                          <span className="text-[11px] text-emerald-800 font-medium block mt-0.5">
+                            {10 - (tableOccupancy[tableNumber] || 0)} open seat{10 - (tableOccupancy[tableNumber] || 0) !== 1 ? 's' : ''} available ({(tableOccupancy[tableNumber] || 0) > 0 ? `${tableOccupancy[tableNumber]}/10 currently seated` : '10 seats free'})
+                          </span>
+                        </div>
+                        {tablesWithOpenSeats.length > 1 && (
+                          <div className="flex items-center gap-1.5 self-end sm:self-center">
+                            <span className="text-[10px] font-bold text-slate-500">Change table:</span>
+                            <select
+                              value={tableNumber}
+                              onChange={(e) => setTableNumber(Number(e.target.value))}
+                              className="text-xs font-bold bg-white border border-emerald-300 rounded-lg px-2 py-1 text-slate-800 focus:outline-none focus:border-emerald-600 shadow-2xs"
+                            >
+                              {tablesWithOpenSeats.map(t => {
+                                const free = 10 - (tableOccupancy[t] || 0);
+                                const isShared = (tableOccupancy[t] || 0) > 0;
+                                return (
+                                  <option key={t} value={t}>
+                                    Table #{t} — {free} open seat{free !== 1 ? 's' : ''}{isShared ? ' (open seats)' : ' (10 free)'}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -645,23 +714,33 @@ export default function BookingWizard({
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-sm font-black text-slate-900">Select an Available Free Table (10 Seats)</h3>
-                    <p className="text-xs text-slate-500">Only 100% free tables with all 10 seats available are shown.</p>
+                    <p className="text-xs text-slate-500">Only tables that have all 10 seats free are available for private booking. Tables with any guests seated are removed.</p>
                   </div>
 
-                  <div className="grid grid-cols-4 sm:grid-cols-7 gap-2.5 max-h-60 overflow-y-auto p-3 rounded-2xl bg-purple-50/50 border border-purple-200">
-                    {completelyFreeTables.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setTableNumber(t)}
-                        className={`p-3 rounded-xl border flex flex-col items-center justify-center transition ${tableNumber === t ? 'border-2 border-emerald-600 bg-emerald-100 text-emerald-950 font-black shadow-md ring-2 ring-emerald-400' : 'border-slate-200 bg-white text-slate-800 hover:border-purple-400'}`}
-                      >
-                        <Table className="w-4 h-4 mb-1 text-purple-700" />
-                        <span className="text-xs font-bold">Table #{t}</span>
-                        <span className="text-[9px] text-emerald-700 font-black">10 Seats Left</span>
-                      </button>
-                    ))}
-                  </div>
+                  {completelyFreeTables.length === 0 ? (
+                    <div className="p-6 rounded-2xl bg-amber-50 border border-amber-300 text-center space-y-2">
+                      <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
+                      <h4 className="font-bold text-amber-900 text-sm">No 100% Free Tables Remaining</h4>
+                      <p className="text-xs text-amber-800">
+                        All tables currently have one or more guests seated. You can still purchase individual dance tickets to be slotted into open seats!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-4 sm:grid-cols-7 gap-2.5 max-h-60 overflow-y-auto p-3 rounded-2xl bg-purple-50/50 border border-purple-200">
+                      {completelyFreeTables.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setTableNumber(t)}
+                          className={`p-3 rounded-xl border flex flex-col items-center justify-center transition ${tableNumber === t ? 'border-2 border-emerald-600 bg-emerald-100 text-emerald-950 font-black shadow-md ring-2 ring-emerald-400' : 'border-slate-200 bg-white text-slate-800 hover:border-purple-400'}`}
+                        >
+                          <Table className="w-4 h-4 mb-1 text-purple-700" />
+                          <span className="text-xs font-bold">Table #{t}</span>
+                          <span className="text-[9px] text-emerald-700 font-black">10 Seats Free</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

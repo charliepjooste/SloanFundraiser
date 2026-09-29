@@ -100,7 +100,10 @@ export default function SeatingArrangementTab({
   const totalOccupiedSeats = tables.reduce((sum, t) => sum + t.occupiedSeats, 0);
   const totalRemainingSeats = Math.max(0, totalCapacity - totalOccupiedSeats);
   const fullTablesCount = tables.filter(t => t.isFull).length;
-  const availableTablesCount = 35 - fullTablesCount;
+  // Available full tables: strictly tables that have all 10 seats free (0 occupied)
+  const completelyFreeTablesCount = tables.filter(t => t.occupiedSeats === 0).length;
+  const partiallyBookedTablesCount = tables.filter(t => t.occupiedSeats > 0 && !t.isFull).length;
+  const availableTablesCount = completelyFreeTablesCount;
 
   // Filter tables
   const filteredTables = tables.filter(t => {
@@ -319,9 +322,9 @@ export default function SeatingArrangementTab({
         </div>
 
         <div className="p-4 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-1">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Open Tables</span>
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">100% Free Tables</span>
           <p className="text-2xl sm:text-3xl font-black text-purple-950">{availableTablesCount} <span className="text-sm font-bold text-slate-400">/ 35</span></p>
-          <span className="text-[10px] text-purple-700 font-semibold">Tables with Available Seats</span>
+          <span className="text-[10px] text-purple-700 font-semibold">{availableTablesCount} full tables ({partiallyBookedTablesCount} sharing open seats)</span>
         </div>
 
         <div className="p-4 rounded-3xl bg-rose-50/70 border border-rose-300 shadow-sm space-y-1">
