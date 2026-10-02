@@ -71,6 +71,7 @@ export default function SeatingArrangementTab({
     const capacity = 10;
     const remainingSeats = Math.max(0, capacity - occupiedSeats);
     const isFull = remainingSeats === 0 || occupiedSeats >= capacity;
+    const isOverbooked = occupiedSeats > capacity;
     const isFilling = remainingSeats > 0 && remainingSeats <= 3;
 
     // Retrieve table metadata (custom name & admin note)
@@ -88,6 +89,7 @@ export default function SeatingArrangementTab({
       remainingSeats,
       remaining: remainingSeats,
       isFull,
+      isOverbooked,
       isFilling,
       tableName,
       tableNote,
@@ -99,7 +101,8 @@ export default function SeatingArrangementTab({
   const totalCapacity = 350;
   const totalOccupiedSeats = tables.reduce((sum, t) => sum + t.occupiedSeats, 0);
   const totalRemainingSeats = Math.max(0, totalCapacity - totalOccupiedSeats);
-  const fullTablesCount = tables.filter(t => t.isFull).length;
+  const fullTablesCount = tables.filter(t => t.isFull && !t.isOverbooked).length;
+  const overbookedTablesCount = tables.filter(t => t.isOverbooked).length;
   // Available full tables: strictly tables that have all 10 seats free (0 occupied)
   const completelyFreeTablesCount = tables.filter(t => t.occupiedSeats === 0).length;
   const partiallyBookedTablesCount = tables.filter(t => t.occupiedSeats > 0 && !t.isFull).length;
@@ -163,20 +166,53 @@ export default function SeatingArrangementTab({
     }
   };
 
-  // Handle Move Guest to another table
+  // Handle Move Guest to another table (supports admin overbooking without error)
   const handleConfirmMove = async () => {
     if (!movingBooking || !movingBooking.targetTable) return;
     
+    const targetTableNum = Number(movingBooking.targetTable);
+    const currentTableNum = Number(movingBooking.booking.tableNumber);
+    const needed = getBookingSeatCount(movingBooking.booking);
+
+    // Compute sequential seat numbers on target table (handles overbooked seats 11, 12... without duplicate collision)
+    let newAllocatedSeats = movingBooking.booking.allocatedSeats || [];
+    if (targetTableNum !== currentTableNum) {
+      const targetTableBookings = (bookings || []).filter(
+        b => Number(b.tableNumber) === targetTableNum && b.id !== movingBooking.booking.id && getBookingSeatCount(b) > 0
+      );
+      const claimedSeats = new Set();
+      targetTableBookings.forEach(b => {
+        if (b.allocatedSeats && Array.isArray(b.allocatedSeats) && b.allocatedSeats.length > 0) {
+          b.allocatedSeats.forEach(s => claimedSeats.add(Number(s)));
+        } else {
+          const count = getBookingSeatCount(b);
+          for (let i = 1; i <= count; i++) claimedSeats.add(i);
+        }
+      });
+      newAllocatedSeats = [];
+      let candidateSeat = 1;
+      while (newAllocatedSeats.length < needed) {
+        if (!claimedSeats.has(candidateSeat)) {
+          newAllocatedSeats.push(candidateSeat);
+          claimedSeats.add(candidateSeat);
+        }
+        candidateSeat++;
+      }
+    }
+
     if (onUpdateBooking) {
-      onUpdateBooking(movingBooking.booking.id, { tableNumber: Number(movingBooking.targetTable) });
+      onUpdateBooking(movingBooking.booking.id, { 
+        tableNumber: targetTableNum,
+        allocatedSeats: newAllocatedSeats 
+      });
     }
 
     try {
       await moveBookingToTable(
         movingBooking.booking.id,
-        Number(movingBooking.targetTable),
-        Number(movingBooking.booking.tableNumber),
-        getBookingSeatCount(movingBooking.booking)
+        targetTableNum,
+        currentTableNum,
+        needed
       );
     } catch (err) {
       console.error("Failed to move booking:", err);
@@ -222,13 +258,13 @@ export default function SeatingArrangementTab({
         }
       });
       const finalAllocatedSeats = [];
-      for (let seat = 1; seat <= 10; seat++) {
-        if (!claimedSeats.has(seat) && finalAllocatedSeats.length < requestedTickets) {
-          finalAllocatedSeats.push(seat);
-        }
-      }
+      let candidateSeat = 1;
       while (finalAllocatedSeats.length < requestedTickets) {
-        finalAllocatedSeats.push(finalAllocatedSeats.length + 1);
+        if (!claimedSeats.has(candidateSeat)) {
+          finalAllocatedSeats.push(candidateSeat);
+          claimedSeats.add(candidateSeat);
+        }
+        candidateSeat++;
       }
 
       const calculatedAmount = isFree 
@@ -457,19 +493,35 @@ export default function SeatingArrangementTab({
                     </p>
                   )}
 
-                  <span className={`text-[11px] font-black block ${table.isFull ? 'text-rose-700' : 'text-emerald-700'}`}>
-                    {table.isFull ? '🔴 Table FULL (0 seats left)' : `🟢 ${table.remainingSeats} of 10 Seats Left`}
+                  <span className={`text-[11px] font-black block ${
+                    table.isOverbooked 
+                      ? 'text-purple-900' 
+                      : table.isFull 
+                      ? 'text-rose-700' 
+                      : 'text-emerald-700'
+                  }`}>
+                    {table.isOverbooked 
+                      ? `🟣 Overbooked (${table.occupiedSeats}/10 seated • +${table.occupiedSeats - 10} extra)`
+                      : table.isFull 
+                      ? '🔴 Table FULL (10/10 seats booked)' 
+                      : `🟢 ${table.remainingSeats} of 10 Seats Left`}
                   </span>
                 </div>
 
                 <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs shrink-0 ${
-                  table.isFull 
+                  table.isOverbooked 
+                    ? 'bg-purple-100 text-purple-950 border-purple-300'
+                    : table.isFull 
                     ? 'bg-rose-100 text-rose-800 border-rose-300' 
                     : table.isFilling
                     ? 'bg-amber-100 text-amber-900 border-amber-300'
                     : 'bg-emerald-100 text-emerald-800 border-emerald-300'
                 }`}>
-                  {table.isFull ? '🔴 FULL' : `${table.remainingSeats} Left`}
+                  {table.isOverbooked 
+                    ? `OVERBOOKED (${table.occupiedSeats}/10)` 
+                    : table.isFull 
+                    ? '🔴 FULL' 
+                    : `${table.remainingSeats} Left`}
                 </span>
               </div>
 
@@ -478,7 +530,9 @@ export default function SeatingArrangementTab({
                 <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200/80">
                   <div 
                     className={`h-full rounded-full transition-all duration-300 ${
-                      table.isFull 
+                      table.isOverbooked 
+                        ? 'bg-purple-600' 
+                        : table.isFull 
                         ? 'bg-rose-500' 
                         : table.isFilling 
                         ? 'bg-amber-500' 
@@ -569,8 +623,18 @@ export default function SeatingArrangementTab({
             {/* Quick Summary Footer */}
             <div className="pt-2.5 border-t border-slate-100 text-[10px] flex items-center justify-between font-semibold">
               <span className="text-slate-500">10 Seats Table</span>
-              <span className={`font-black ${table.isFull ? 'text-rose-700' : 'text-emerald-700'}`}>
-                {table.isFull ? '🔴 Table FULL (0 seats left)' : `🟢 ${table.remainingSeats} seats left`}
+              <span className={`font-black ${
+                table.isOverbooked 
+                  ? 'text-purple-900' 
+                  : table.isFull 
+                  ? 'text-rose-700' 
+                  : 'text-emerald-700'
+              }`}>
+                {table.isOverbooked 
+                  ? `🟣 Overbooked (${table.occupiedSeats}/10 • +${table.occupiedSeats - 10})` 
+                  : table.isFull 
+                  ? '🔴 Table FULL (0 seats left)' 
+                  : `🟢 ${table.remainingSeats} seats left`}
               </span>
             </div>
           </div>
@@ -611,15 +675,14 @@ export default function SeatingArrangementTab({
                   {tables.map((t) => {
                     const isCurrent = t.tableNumber === movingBooking.booking.tableNumber;
                     const needed = getBookingSeatCount(movingBooking.booking);
-                    const canFit = t.remainingSeats >= needed || isCurrent;
+                    const isOver = t.occupiedSeats >= 10;
 
                     return (
                       <option 
                         key={t.tableNumber} 
-                        value={t.tableNumber} 
-                        disabled={!canFit}
+                        value={t.tableNumber}
                       >
-                        Table #{t.tableNumber} — {t.isFull ? '🔴 FULL (0 seats left)' : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10 booked)`} {isCurrent ? '← (Current Table)' : ''}
+                        Table #{t.tableNumber} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10 booked)`} {isCurrent ? '← (Current Table)' : ''}
                       </option>
                     );
                   })}
@@ -642,11 +705,17 @@ export default function SeatingArrangementTab({
                   );
                 }
 
+                const newTotal = targetObj.occupiedSeats + needed;
                 if (targetObj.remainingSeats < needed) {
                   return (
-                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-1.5">
-                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span>Table #{targetObj.tableNumber} only has {targetObj.remainingSeats} seat(s) left. Cannot fit {needed} guest(s).</span>
+                    <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 text-xs font-medium space-y-1">
+                      <div className="flex items-center gap-1.5 font-black text-purple-900">
+                        <Sparkles className="w-4 h-4 text-purple-700 shrink-0" />
+                        <span>Admin Overbooking Allowed: Table #{targetObj.tableNumber}</span>
+                      </div>
+                      <p className="text-[11px] text-purple-800">
+                        Table #{targetObj.tableNumber} currently has {targetObj.occupiedSeats}/10 seated. Moving {needed} guest(s) here will seat {newTotal}/10 (+{newTotal - 10} extra over capacity). Permitted for admin without error.
+                      </p>
                     </div>
                   );
                 }
@@ -658,7 +727,7 @@ export default function SeatingArrangementTab({
                       <span>Table #{targetObj.tableNumber} has {targetObj.remainingSeats} seats left</span>
                     </div>
                     <p className="text-[11px] text-emerald-800/80">
-                      After moving {needed} guest(s), Table #{targetObj.tableNumber} will have {targetObj.remainingSeats - needed} seats remaining.
+                      After moving {needed} guest(s), Table #{targetObj.tableNumber} will have {targetObj.remainingSeats - needed} seats remaining ({targetObj.occupiedSeats + needed}/10 booked).
                     </p>
                   </div>
                 );
@@ -676,12 +745,7 @@ export default function SeatingArrangementTab({
               <button
                 type="button"
                 onClick={handleConfirmMove}
-                disabled={(() => {
-                  const targetObj = tables.find(t => t.tableNumber === Number(movingBooking.targetTable));
-                  const needed = getBookingSeatCount(movingBooking.booking);
-                  const isCurrent = Number(movingBooking.targetTable) === Number(movingBooking.booking.tableNumber);
-                  return !isCurrent && targetObj && targetObj.remainingSeats < needed;
-                })()}
+                disabled={Number(movingBooking.targetTable) === Number(movingBooking.booking.tableNumber)}
                 className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-extrabold text-xs shadow-md hover:bg-emerald-700 transition disabled:opacity-40 cursor-pointer"
               >
                 Confirm Move to Table #{movingBooking.targetTable}
@@ -846,11 +910,14 @@ export default function SeatingArrangementTab({
                     onChange={(e) => setAddGuestForm({ ...addGuestForm, tableNumber: Number(e.target.value) })}
                     className="w-full bg-slate-50 border border-purple-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-600 font-bold"
                   >
-                    {tables.map(t => (
-                      <option key={t.tableNumber} value={t.tableNumber} disabled={t.isFull}>
-                        Table #{t.tableNumber} — {t.isFull ? '🔴 FULL (0 seats left)' : `🟢 ${t.remainingSeats} seats left`}
-                      </option>
-                    ))}
+                    {tables.map(t => {
+                      const isOver = t.occupiedSeats >= 10;
+                      return (
+                        <option key={t.tableNumber} value={t.tableNumber}>
+                          Table #{t.tableNumber} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10)`}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -872,23 +939,25 @@ export default function SeatingArrangementTab({
                 const selectedT = tables.find(t => t.tableNumber === Number(addGuestForm.tableNumber));
                 if (!selectedT) return null;
                 const requested = Number(addGuestForm.numTickets);
-                const hasCapacity = selectedT.remainingSeats >= requested;
+                const newTotal = selectedT.occupiedSeats + requested;
+
+                if (selectedT.occupiedSeats >= 10 || selectedT.remainingSeats < requested) {
+                  return (
+                    <div className="p-2.5 rounded-xl border border-purple-300 bg-purple-50 text-purple-950 text-xs font-semibold space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-black text-purple-900">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-700" />
+                        <span>Admin Overbooking Allowed: Table #{selectedT.tableNumber} ({selectedT.occupiedSeats}/10 seated)</span>
+                      </div>
+                      <p className="text-[11px] text-purple-800 font-normal">
+                        Adding {requested} guest(s) will seat {newTotal}/10 at this table (+{Math.max(0, newTotal - 10)} extra over capacity). Permitted for admin without error.
+                      </p>
+                    </div>
+                  );
+                }
 
                 return (
-                  <div className={`p-2.5 rounded-xl border text-xs font-semibold ${
-                    selectedT.isFull 
-                      ? 'bg-rose-50 border-rose-300 text-rose-800' 
-                      : !hasCapacity 
-                      ? 'bg-amber-50 border-amber-300 text-amber-900' 
-                      : 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                  }`}>
-                    {selectedT.isFull ? (
-                      <span>🔴 Table #{selectedT.tableNumber} is FULL (0 seats left). Please select another table.</span>
-                    ) : !hasCapacity ? (
-                      <span>⚠️ Table #{selectedT.tableNumber} only has {selectedT.remainingSeats} seat(s) left. Cannot assign {requested} seats.</span>
-                    ) : (
-                      <span>🟢 Table #{selectedT.tableNumber}: {selectedT.remainingSeats} seats left ({selectedT.occupiedSeats}/10 booked).</span>
-                    )}
+                  <div className="p-2.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs font-semibold">
+                    <span>🟢 Table #{selectedT.tableNumber}: {selectedT.remainingSeats} seats left ({selectedT.occupiedSeats}/10 booked).</span>
                   </div>
                 );
               })()}
@@ -926,10 +995,6 @@ export default function SeatingArrangementTab({
                 </button>
                 <button
                   type="submit"
-                  disabled={(() => {
-                    const selectedT = tables.find(t => t.tableNumber === Number(addGuestForm.tableNumber));
-                    return selectedT && selectedT.remainingSeats < Number(addGuestForm.numTickets);
-                  })()}
                   className={`px-4 py-2 rounded-xl text-white font-extrabold text-xs shadow-md transition disabled:opacity-40 cursor-pointer ${
                     addGuestForm.isFreeTicket 
                       ? 'bg-purple-700 hover:bg-purple-800' 

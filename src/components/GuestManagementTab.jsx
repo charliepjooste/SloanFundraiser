@@ -15,7 +15,9 @@ import {
   Share2, 
   Send,
   MessageCircle,
-  ExternalLink
+  ExternalLink,
+  Sparkles,
+  AlertCircle
 } from 'lucide-react';
 import { 
   updateGuestRecord, 
@@ -106,6 +108,7 @@ export default function GuestManagementTab({
     const capacity = 10;
     const remainingSeats = Math.max(0, capacity - occupiedSeats);
     const isFull = remainingSeats === 0 || occupiedSeats >= capacity;
+    const isOverbooked = occupiedSeats > capacity;
 
     return {
       tableNumber: tableNo,
@@ -113,6 +116,7 @@ export default function GuestManagementTab({
       occupiedSeats,
       remainingSeats,
       isFull,
+      isOverbooked,
       bookings: tableBookings
     };
   });
@@ -152,13 +156,53 @@ export default function GuestManagementTab({
     if (!editingGuest) return;
 
     const isFree = Boolean(editingGuest.isFreeTicket);
+    const newTable = Number(editingGuest.tableNumber) || 1;
+    const requestedTickets = Number(editingGuest.numTickets) || 0;
+
+    // Check if table or ticket count changed to re-allocate seats cleanly
+    const existingBooking = bookings.find(b => b.id === editingGuest.id);
+    const prevTable = Number(existingBooking?.tableNumber || editingGuest.tableNumber);
+    let finalAllocatedSeats = editingGuest.allocatedSeats && Array.isArray(editingGuest.allocatedSeats)
+      ? [...editingGuest.allocatedSeats]
+      : [];
+
+    const tableChanged = prevTable !== newTable;
+    const ticketsChanged = finalAllocatedSeats.length !== requestedTickets;
+
+    if (requestedTickets === 0) {
+      finalAllocatedSeats = [];
+    } else if (tableChanged || ticketsChanged || finalAllocatedSeats.length === 0) {
+      const otherBookings = (bookings || []).filter(
+        b => b.id !== editingGuest.id && Number(b.tableNumber) === newTable && getBookingSeatCount(b) > 0
+      );
+      const claimedSeats = new Set();
+      otherBookings.forEach(b => {
+        if (b.allocatedSeats && Array.isArray(b.allocatedSeats) && b.allocatedSeats.length > 0) {
+          b.allocatedSeats.forEach(s => claimedSeats.add(Number(s)));
+        } else {
+          const count = getBookingSeatCount(b);
+          for (let i = 1; i <= count; i++) claimedSeats.add(i);
+        }
+      });
+      finalAllocatedSeats = [];
+      let candidateSeat = 1;
+      while (finalAllocatedSeats.length < requestedTickets) {
+        if (!claimedSeats.has(candidateSeat)) {
+          finalAllocatedSeats.push(candidateSeat);
+          claimedSeats.add(candidateSeat);
+        }
+        candidateSeat++;
+      }
+    }
+
     const updatedData = {
       firstName: editingGuest.firstName,
       surname: editingGuest.surname,
       email: editingGuest.email,
       mobileNumber: editingGuest.mobileNumber,
-      tableNumber: Number(editingGuest.tableNumber) || 1,
-      numTickets: Number(editingGuest.numTickets) || 0,
+      tableNumber: newTable,
+      numTickets: requestedTickets,
+      allocatedSeats: finalAllocatedSeats,
       raffleTicketsCount: Number(editingGuest.raffleTicketsCount) || 0,
       raffleEntrants: editingGuest.raffleEntrants || [],
       specialRequests: editingGuest.specialRequests || '',
@@ -270,13 +314,13 @@ export default function GuestManagementTab({
         }
       });
       const finalAllocatedSeats = [];
-      for (let seat = 1; seat <= 10; seat++) {
-        if (!claimedSeats.has(seat) && finalAllocatedSeats.length < requestedTickets) {
-          finalAllocatedSeats.push(seat);
-        }
-      }
+      let candidateSeat = 1;
       while (finalAllocatedSeats.length < requestedTickets) {
-        finalAllocatedSeats.push(finalAllocatedSeats.length + 1);
+        if (!claimedSeats.has(candidateSeat)) {
+          finalAllocatedSeats.push(candidateSeat);
+          claimedSeats.add(candidateSeat);
+        }
+        candidateSeat++;
       }
 
       const calculatedAmount = isFree 
@@ -570,11 +614,17 @@ export default function GuestManagementTab({
                                 )}
                                 {tObj && (
                                   <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
-                                    tObj.isFull 
+                                    tObj.isOverbooked
+                                      ? 'bg-purple-100 text-purple-900 border-purple-300'
+                                      : tObj.isFull 
                                       ? 'bg-rose-100 text-rose-800 border-rose-300' 
                                       : 'bg-emerald-100 text-emerald-800 border-emerald-200'
                                   }`}>
-                                    {tObj.isFull ? '🔴 FULL' : `🟢 ${tObj.remainingSeats} Left`}
+                                    {tObj.isOverbooked 
+                                      ? `🟣 ${tObj.occupiedSeats}/10 (+${tObj.occupiedSeats - 10} Extra)` 
+                                      : tObj.isFull 
+                                      ? '🔴 FULL' 
+                                      : `🟢 ${tObj.remainingSeats} Left`}
                                   </span>
                                 )}
                               </>
@@ -846,12 +896,13 @@ export default function GuestManagementTab({
                         const originalTickets = (originalGuestBooking && Number(originalGuestBooking.tableNumber) === t.tableNumber) 
                           ? (Number(originalGuestBooking.numTickets) || 0) 
                           : 0;
-                        const effectiveRemaining = isCurrentTable ? Math.min(10, t.remainingSeats + originalTickets) : t.remainingSeats;
-                        const isTableFull = effectiveRemaining === 0;
+                        const effectiveOccupied = Math.max(0, t.occupiedSeats - originalTickets);
+                        const effectiveRemaining = Math.max(0, 10 - effectiveOccupied);
+                        const isOver = t.occupiedSeats >= 10;
 
                         return (
                           <option key={t.tableNumber} value={t.tableNumber}>
-                            Table #{t.tableNumber} — {isTableFull ? '🔴 FULL (0 seats left)' : `🟢 ${effectiveRemaining} seats left (${10 - effectiveRemaining}/10 booked)`} {isCurrentTable ? '← (Current)' : ''}
+                            Table #{t.tableNumber} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${effectiveRemaining} seats left (${effectiveOccupied}/10)`} {isCurrentTable ? '← (Current)' : ''}
                           </option>
                         );
                       })}
@@ -864,7 +915,7 @@ export default function GuestManagementTab({
                       onChange={(e) => setEditingGuest({ ...editingGuest, numTickets: Number(e.target.value) })}
                       className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 font-bold focus:outline-none focus:border-emerald-600"
                     >
-                      {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                      {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(n => (
                         <option key={n} value={n}>{n} Seat{n !== 1 ? 's' : ''}</option>
                       ))}
                     </select>
@@ -879,25 +930,28 @@ export default function GuestManagementTab({
                   const originalTickets = (originalGuestBooking && Number(originalGuestBooking.tableNumber) === selectedT.tableNumber) 
                     ? (Number(originalGuestBooking.numTickets) || 0) 
                     : 0;
-                  const effectiveRemaining = Math.min(10, selectedT.remainingSeats + originalTickets);
+                  const effectiveOccupied = Math.max(0, selectedT.occupiedSeats - originalTickets);
+                  const effectiveRemaining = Math.max(0, 10 - effectiveOccupied);
                   const requested = Number(editingGuest.numTickets) || 0;
-                  const canFit = effectiveRemaining >= requested;
+                  const newTotal = effectiveOccupied + requested;
+
+                  if (newTotal > 10) {
+                    return (
+                      <div className="p-2.5 rounded-xl border border-purple-300 bg-purple-50 text-purple-950 text-xs font-semibold space-y-0.5">
+                        <div className="flex items-center gap-1.5 font-black text-purple-900">
+                          <Sparkles className="w-3.5 h-3.5 text-purple-700" />
+                          <span>Admin Overbooking Allowed: Table #{selectedT.tableNumber} ({effectiveOccupied}/10 seated)</span>
+                        </div>
+                        <p className="text-[11px] text-purple-800 font-normal">
+                          Assigning {requested} tickets will seat {newTotal}/10 at this table (+{newTotal - 10} extra over capacity). Permitted for admin without error.
+                        </p>
+                      </div>
+                    );
+                  }
 
                   return (
-                    <div className={`p-2.5 rounded-xl border text-xs font-semibold ${
-                      effectiveRemaining === 0 
-                        ? 'bg-rose-50 border-rose-300 text-rose-800' 
-                        : !canFit 
-                        ? 'bg-amber-50 border-amber-300 text-amber-900' 
-                        : 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                    }`}>
-                      {effectiveRemaining === 0 ? (
-                        <span>🔴 Table #{selectedT.tableNumber} is currently FULL (0 seats left).</span>
-                      ) : !canFit ? (
-                        <span>⚠️ Table #{selectedT.tableNumber} only has {effectiveRemaining} seat(s) left for this booking. You selected {requested} tickets.</span>
-                      ) : (
-                        <span>🟢 Table #{selectedT.tableNumber}: {effectiveRemaining} seats left ({10 - effectiveRemaining}/10 booked).</span>
-                      )}
+                    <div className="p-2.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs font-semibold">
+                      <span>🟢 Table #{selectedT.tableNumber}: {effectiveRemaining - requested} seats remaining after this booking ({newTotal}/10 booked).</span>
                     </div>
                   );
                 })()}
@@ -1085,11 +1139,14 @@ export default function GuestManagementTab({
                     onChange={(e) => setAddForm({ ...addForm, tableNumber: Number(e.target.value) })}
                     className="w-full bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-600 font-bold"
                   >
-                    {tables.map(t => (
-                      <option key={t.tableNumber} value={t.tableNumber} disabled={t.isFull}>
-                        Table #{t.tableNumber} — {t.isFull ? '🔴 FULL (0 seats left)' : `🟢 ${t.remainingSeats} seats left`}
-                      </option>
-                    ))}
+                    {tables.map(t => {
+                      const isOver = t.occupiedSeats >= 10;
+                      return (
+                        <option key={t.tableNumber} value={t.tableNumber}>
+                          Table #{t.tableNumber} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10)`}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -1111,23 +1168,25 @@ export default function GuestManagementTab({
                 const selectedT = tables.find(t => t.tableNumber === Number(addForm.tableNumber));
                 if (!selectedT) return null;
                 const requested = Number(addForm.numTickets);
-                const hasCapacity = selectedT.remainingSeats >= requested;
+                const newTotal = selectedT.occupiedSeats + requested;
+
+                if (selectedT.occupiedSeats >= 10 || selectedT.remainingSeats < requested) {
+                  return (
+                    <div className="p-2.5 rounded-xl border border-purple-300 bg-purple-50 text-purple-950 text-xs font-semibold space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-black text-purple-900">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-700" />
+                        <span>Admin Overbooking Allowed: Table #{selectedT.tableNumber} ({selectedT.occupiedSeats}/10 seated)</span>
+                      </div>
+                      <p className="text-[11px] text-purple-800 font-normal">
+                        Adding {requested} guest(s) will seat {newTotal}/10 at this table (+{Math.max(0, newTotal - 10)} extra over capacity). Permitted for admin without error.
+                      </p>
+                    </div>
+                  );
+                }
 
                 return (
-                  <div className={`p-2.5 rounded-xl border text-xs font-semibold ${
-                    selectedT.isFull 
-                      ? 'bg-rose-50 border-rose-300 text-rose-800' 
-                      : !hasCapacity 
-                      ? 'bg-amber-50 border-amber-300 text-amber-900' 
-                      : 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                  }`}>
-                    {selectedT.isFull ? (
-                      <span>🔴 Table #{selectedT.tableNumber} is FULL (0 seats left). Please select another table.</span>
-                    ) : !hasCapacity ? (
-                      <span>⚠️ Table #{selectedT.tableNumber} only has {selectedT.remainingSeats} seat(s) left. Cannot assign {requested} seats.</span>
-                    ) : (
-                      <span>🟢 Table #{selectedT.tableNumber}: {selectedT.remainingSeats} seats left ({selectedT.occupiedSeats}/10 booked).</span>
-                    )}
+                  <div className="p-2.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs font-semibold">
+                    <span>🟢 Table #{selectedT.tableNumber}: {selectedT.remainingSeats} seats left ({selectedT.occupiedSeats}/10 booked).</span>
                   </div>
                 );
               })()}
@@ -1169,10 +1228,6 @@ export default function GuestManagementTab({
                 </button>
                 <button
                   type="submit"
-                  disabled={(() => {
-                    const selectedT = tables.find(t => t.tableNumber === Number(addForm.tableNumber));
-                    return selectedT && selectedT.remainingSeats < Number(addForm.numTickets);
-                  })()}
                   className={`px-5 py-2 rounded-xl text-white font-extrabold text-xs shadow-md transition disabled:opacity-40 cursor-pointer ${
                     addForm.isFreeTicket 
                       ? 'bg-purple-700 hover:bg-purple-800' 

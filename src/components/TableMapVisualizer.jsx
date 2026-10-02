@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Users, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 import { getBookingSeatCount } from '../firebase';
 
 export default function TableMapVisualizer({ selectedTableNumber, onSelectTable, tablesData = [], bookings = [] }) {
@@ -21,6 +21,7 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
     const reserved = bookings && bookings.length > 0 ? bookingsSeats : (existingTable?.seatsReserved || 0);
     const remaining = Math.max(0, capacity - reserved);
     const isFull = remaining === 0 || reserved >= capacity;
+    const isOverbooked = reserved > capacity;
     const tableName = (existingTable?.tableName || '').trim();
     const tableNote = (existingTable?.tableNote || '').trim();
 
@@ -30,6 +31,7 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
       reserved,
       remaining,
       isFull,
+      isOverbooked,
       guestCount: tableBookings.length,
       tableName,
       tableNote
@@ -46,7 +48,7 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
           </h3>
           <p className="text-xs text-purple-700 font-medium">Click any table to filter and inspect assigned guests & available seats</p>
         </div>
-        <div className="flex items-center gap-3 text-xs font-bold">
+        <div className="flex items-center gap-3 text-xs font-bold flex-wrap">
           <div className="flex items-center gap-1.5 text-emerald-700">
             <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
             Available
@@ -59,6 +61,10 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
             <span className="w-3 h-3 rounded-full bg-rose-500"></span>
             FULL
           </div>
+          <div className="flex items-center gap-1.5 text-purple-700">
+            <span className="w-3 h-3 rounded-full bg-purple-600"></span>
+            Overbooked (&gt;10)
+          </div>
         </div>
       </div>
 
@@ -69,7 +75,10 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
           let statusBg = "border-slate-200 bg-slate-50 text-slate-700 hover:border-emerald-500 hover:bg-emerald-50/50";
           let badgeBg = "bg-emerald-100 text-emerald-800 border-emerald-300";
           
-          if (table.isFull) {
+          if (table.isOverbooked) {
+            statusBg = "border-purple-300 bg-purple-50 text-purple-900 shadow-xs";
+            badgeBg = "bg-purple-100 text-purple-900 border-purple-300";
+          } else if (table.isFull) {
             statusBg = "border-rose-300 bg-rose-50 text-rose-900 shadow-xs";
             badgeBg = "bg-rose-100 text-rose-800 border-rose-300";
           } else if (table.remaining <= 3) {
@@ -95,7 +104,10 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
                 {isSelected && (
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 )}
-                {table.isFull && !isSelected && (
+                {table.isOverbooked && !isSelected && (
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                )}
+                {table.isFull && !table.isOverbooked && !isSelected && (
                   <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
                 )}
               </div>
@@ -108,9 +120,21 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
 
               {/* Table Graphic showing Seats Left */}
               <div className="flex items-center justify-center my-1 py-0.5">
-                <div className={`w-10 h-10 rounded-full border-2 flex flex-col items-center justify-center bg-white shadow-xs ${table.isFull ? 'border-rose-500 text-rose-700' : table.remaining <= 3 ? 'border-amber-500 text-amber-800' : 'border-emerald-500 text-emerald-800'}`}>
-                  <span className="text-[11px] font-black leading-none">{table.isFull ? '0' : table.remaining}</span>
-                  <span className="text-[7px] font-black uppercase tracking-tight leading-none mt-0.5">{table.isFull ? 'FULL' : 'LEFT'}</span>
+                <div className={`w-10 h-10 rounded-full border-2 flex flex-col items-center justify-center bg-white shadow-xs ${
+                  table.isOverbooked
+                    ? 'border-purple-500 text-purple-800'
+                    : table.isFull 
+                    ? 'border-rose-500 text-rose-700' 
+                    : table.remaining <= 3 
+                    ? 'border-amber-500 text-amber-800' 
+                    : 'border-emerald-500 text-emerald-800'
+                }`}>
+                  <span className="text-[11px] font-black leading-none">
+                    {table.isOverbooked ? `+${table.reserved - table.capacity}` : table.isFull ? '0' : table.remaining}
+                  </span>
+                  <span className="text-[7px] font-black uppercase tracking-tight leading-none mt-0.5">
+                    {table.isOverbooked ? 'OVER' : table.isFull ? 'FULL' : 'LEFT'}
+                  </span>
                 </div>
               </div>
 
@@ -118,7 +142,7 @@ export default function TableMapVisualizer({ selectedTableNumber, onSelectTable,
               <div className="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-slate-200/80 font-bold">
                 <span className="text-slate-600 font-semibold">Seats:</span>
                 <span className={`px-1.5 py-0.5 rounded font-black border text-[9px] ${badgeBg}`}>
-                  {table.isFull ? '🔴 FULL' : `${table.remaining} Left`}
+                  {table.isOverbooked ? `🟣 ${table.reserved}/10 Over` : table.isFull ? '🔴 FULL' : `${table.remaining} Left`}
                 </span>
               </div>
             </button>
