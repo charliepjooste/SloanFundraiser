@@ -227,7 +227,7 @@ export default function CheckInPortal({ bookings = [], onViewTicketPass }) {
           </div>
           <p className="text-3xl font-black text-slate-900">{totalTicketsCount} Passes</p>
           <span className="text-xs text-purple-800 font-bold block">
-            Across {bookings.length} Bookings • 35 Tables (350 Seats)
+            Across {bookings.length} Bookings • 40 Tables (400 Seats)
           </span>
         </div>
 
@@ -287,9 +287,9 @@ export default function CheckInPortal({ bookings = [], onViewTicketPass }) {
             onChange={(e) => setFilterTable(e.target.value)}
             className="bg-slate-50 border border-purple-200 rounded-xl px-3 py-1.5 text-purple-950 font-bold focus:outline-none focus:border-emerald-600"
           >
-            <option value="all">All Tables (1-35)</option>
-            {Array.from({ length: 35 }, (_, i) => i + 1).map(num => (
-              <option key={num} value={num}>Table #{num}</option>
+            <option value="all">All Tables (1-40)</option>
+            {Array.from({ length: 40 }, (_, i) => i + 1).map(num => (
+              <option key={num} value={num}>Table #{num}{num > 35 ? ' (Admin Table)' : ''}</option>
             ))}
           </select>
 

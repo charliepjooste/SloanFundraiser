@@ -121,18 +121,18 @@ export default function App() {
   const totalTicketsSold = bookings.reduce((sum, b) => sum + getBookingSeatCount(b), 0);
   const totalRaffleTicketsSold = bookings.reduce((sum, b) => sum + (Number(b.raffleTicketsCount) || 0), 0);
 
-  // Dynamic table occupancy calculation across 35 tables (10 capacity each = 350 seats)
+  // Dynamic table occupancy calculation across 40 tables (10 capacity each = 400 seats total; 35 public tables, 36-40 admin-only)
   const tableOccupancyMap = {};
-  for (let i = 1; i <= 35; i++) tableOccupancyMap[i] = 0;
+  for (let i = 1; i <= 40; i++) tableOccupancyMap[i] = 0;
   bookings.forEach(b => {
-    if (b.tableNumber && b.tableNumber >= 1 && b.tableNumber <= 35) {
+    if (b.tableNumber && b.tableNumber >= 1 && b.tableNumber <= 40) {
       tableOccupancyMap[b.tableNumber] = (tableOccupancyMap[b.tableNumber] || 0) + getBookingSeatCount(b);
     }
   });
   const fullTablesCount = Object.values(tableOccupancyMap).filter(seats => seats >= 10).length;
-  // Only tables with all 10 seats free (0 occupied) are considered available full tables for guests.
-  // If a table has even 1 person sitting at it, it is not a full available table and is removed from this count.
-  const availableTablesCount = Object.values(tableOccupancyMap).filter(seats => seats === 0).length;
+  // Only public guest tables (1-35) with all 10 seats free
+  const availableTablesCount = Object.keys(tableOccupancyMap)
+    .filter(t => Number(t) <= 35 && tableOccupancyMap[t] === 0).length;
   const totalSeatsRemaining = Math.max(0, 350 - totalTicketsSold);
 
   // Post-booking toast state
@@ -276,7 +276,7 @@ export default function App() {
           <div className="flex items-center gap-2 font-bold">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <span>🛡️ Admin Console: <strong className="text-white font-mono">{adminEmail}</strong></span>
-            <span className="hidden sm:inline text-purple-300">• Full Management Access (35 Tables & Check-In)</span>
+            <span className="hidden sm:inline text-purple-300">• Full Management Access (40 Tables & Check-In)</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -309,8 +309,9 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-black text-slate-900 tracking-tight">Sloan Jooste's Fundraiser Dance</h1>
-                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  {availableTablesCount} of 35 Tables Available
+                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+                  🔴 SOLD OUT (All Tables Booked)
                 </span>
               </div>
               <p className="text-xs text-purple-900 font-semibold flex flex-wrap items-center gap-1.5">
@@ -335,7 +336,7 @@ export default function App() {
                   onClick={() => setActiveTab('seating')}
                   className={`px-3 py-1.5 rounded-xl transition ${activeTab === 'seating' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-purple-900'}`}
                 >
-                  Seating (35 Tables)
+                  Seating (40 Tables)
                 </button>
                 <button
                   onClick={() => setActiveTab('guests')}
@@ -421,10 +422,10 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => handleOpenBooking('Standard Dance Ticket')}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition"
+              onClick={() => handleOpenBooking('Raffle Tickets Only')}
+              className="px-3.5 py-2 rounded-xl bg-purple-900 hover:bg-purple-950 text-white font-black text-xs flex items-center gap-1.5 shadow-md transition"
             >
-              <Ticket className="w-4 h-4" /> Get Tickets
+              <Gift className="w-4 h-4 text-emerald-400" /> Support via Raffle
             </button>
           </div>
 
@@ -436,7 +437,7 @@ export default function App() {
         <button onClick={() => setActiveTab('overview')} className={activeTab === 'overview' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Overview</button>
         {isAdmin && (
           <>
-            <button onClick={() => setActiveTab('seating')} className={activeTab === 'seating' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>35 Tables</button>
+            <button onClick={() => setActiveTab('seating')} className={activeTab === 'seating' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>40 Tables</button>
             <button onClick={() => setActiveTab('guests')} className={activeTab === 'guests' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Guests</button>
             <button onClick={() => setActiveTab('donations')} className={activeTab === 'donations' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Donations</button>
             <button onClick={() => setActiveTab('checkin')} className={activeTab === 'checkin' ? 'text-emerald-700 border-b-2 border-emerald-600 pb-0.5' : 'text-slate-500'}>Check-In</button>
@@ -620,6 +621,35 @@ export default function App() {
           </div>
         )}
 
+        {/* SOLD OUT PUBLIC ANNOUNCEMENT BANNER */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white shadow-xl border border-red-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 rounded-2xl bg-white/20 shrink-0 mt-0.5">
+              <Ticket className="w-6 h-6 text-white stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-black uppercase tracking-wider bg-white text-red-700 px-2.5 py-0.5 rounded-full shadow-xs">
+                  ⛔ 100% SOLD OUT
+                </span>
+                <span className="text-xs font-bold text-red-100">Dance Seats & Table Capacity Fully Booked</span>
+              </div>
+              <p className="text-sm font-black text-white mt-1">
+                All dance tickets and private tables are officially sold out. No guest seats remain.
+              </p>
+              <p className="text-xs text-red-100 mt-0.5 font-medium">
+                🎟️ Please join us in supporting Sloan by entering the <strong>Grand Charity Raffle</strong> (Whole Lamb & 6 other prizes) or making a direct donation!
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => handleOpenBooking('Raffle Tickets Only')}
+            className="self-start sm:self-center px-5 py-2.5 rounded-2xl bg-white text-red-700 hover:bg-red-50 font-black text-xs shadow-md transition shrink-0 cursor-pointer"
+          >
+            🎟️ Buy Raffle Tickets Instead
+          </button>
+        </div>
+
         {/* HERO BANNER */}
         <div className="relative rounded-3xl p-6 sm:p-10 glass-card border border-purple-200 overflow-hidden shadow-lg bg-gradient-to-br from-white via-emerald-50/40 to-purple-50/50">
           
@@ -696,10 +726,10 @@ export default function App() {
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
-                  onClick={() => handleOpenBooking('Standard Dance Ticket')}
-                  className="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm flex items-center gap-2 shadow-lg shadow-emerald-600/20 hover:scale-[1.01] transition"
+                  onClick={() => handleOpenBooking('Raffle Tickets Only')}
+                  className="px-5 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-rose-600/20 hover:scale-[1.01] transition cursor-pointer"
                 >
-                  <Ticket className="w-5 h-5" /> Book Dance Tickets (R150)
+                  <Ticket className="w-5 h-5" /> ⛔ Dance Tickets SOLD OUT (Support via Raffle)
                 </button>
                 <button
                   onClick={() => setIsMyTicketsOpen(true)}
@@ -746,10 +776,10 @@ export default function App() {
                   <span className="font-black text-slate-900 block">{totalTicketsSold}</span>
                   <span className="text-[10px] text-emerald-800 font-semibold">Tickets Sold</span>
                 </div>
-                <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200">
-                  <Table className="w-4 h-4 text-purple-700 mx-auto mb-1" />
-                  <span className="font-black text-purple-950 block">{availableTablesCount} Full Tables</span>
-                  <span className="text-[10px] text-purple-900 font-semibold">{totalSeatsRemaining} Seats Left</span>
+                <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200">
+                  <Table className="w-4 h-4 text-rose-700 mx-auto mb-1" />
+                  <span className="font-black text-rose-950 block">0 Tables Left</span>
+                  <span className="text-[10px] text-rose-700 font-black">⛔ SOLD OUT</span>
                 </div>
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
                   <Gift className="w-4 h-4 text-emerald-700 mx-auto mb-1" />
@@ -1058,10 +1088,10 @@ export default function App() {
                 <p className="text-xs text-purple-900 font-medium">Heartwarming notes and contributions for Sloan Jooste's care journey</p>
               </div>
               <button
-                onClick={() => handleOpenBooking('Standard Dance Ticket')}
-                className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-black text-xs flex items-center gap-1.5 shadow-md hover:bg-emerald-700 transition"
+                onClick={() => handleOpenBooking('Raffle Tickets Only')}
+                className="px-4 py-2.5 rounded-xl bg-purple-900 hover:bg-purple-950 text-white font-black text-xs flex items-center gap-1.5 shadow-md transition"
               >
-                Add Your Message
+                <Gift className="w-4 h-4 text-emerald-400" /> Support via Raffle & Add Message
               </button>
             </div>
 
@@ -1070,13 +1100,13 @@ export default function App() {
                 <Heart className="w-12 h-12 text-emerald-600/30 mx-auto" />
                 <h4 className="font-extrabold text-slate-700 text-sm">Be the first to leave a message of support!</h4>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Book a ticket or support Sloan's raffle to leave an encouraging message on the Wall of Support.
+                  Support Sloan's charity raffle or send a donation to leave an encouraging message on the Wall of Support.
                 </p>
                 <button
-                  onClick={() => handleOpenBooking('Standard Dance Ticket')}
-                  className="px-5 py-2.5 rounded-2xl bg-emerald-600 text-white font-black text-xs shadow-md hover:bg-emerald-700 transition"
+                  onClick={() => handleOpenBooking('Raffle Tickets Only')}
+                  className="px-5 py-2.5 rounded-2xl bg-purple-900 hover:bg-purple-950 text-white font-black text-xs shadow-md transition"
                 >
-                  Book Tickets & Leave Message
+                  Support via Raffle & Leave Message
                 </button>
               </div>
             ) : (

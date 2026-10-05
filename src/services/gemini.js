@@ -31,9 +31,9 @@ Event Details:
 - Live Entertainment: Live Music by The Elginairs (The Main Event) & Official DJ: DJ Cool J ("The beat that keeps the night alive!")
 - Dress Code: A Splash of Green in aid of Cerebral Palsy 💚
 - BYO: Bring Your Own Platter & XYZ
-- Capacity: 35 Tables (10 per table = 350 seats)
-- Tickets: Standard Dance Ticket (R150 per person), Full Private Table of 10 (R1,500)
-- Grand Charity Raffle: 7 Prizes (R50 for 1 ticket, R100 for 3 tickets). Winner removed after each draw.
+- Capacity & Status: All public dance tables (350 seats) are officially 100% SOLD OUT! Total 40 tables in the system (Tables 36-40 reserved strictly for Admin/VIPs).
+- Dance Tickets & Tables: COMPLETELY SOLD OUT. No dance tickets or private tables can be purchased by guests.
+- Grand Charity Raffle: Guests can still actively support Sloan by purchasing Grand Charity Raffle tickets (7 Prizes: R50 for 1 ticket, R100 for 3 tickets). Winner removed after each draw.
   1. 1st Draw: Hot Stone Massage at Radiance Room (Value: R600)
   2. 2nd Draw: Hot Stone Massage at Radiance Room (Value: R600)
   3. 3rd Draw: Spyced Restaurant Voucher (Value: R1,820)
@@ -78,8 +78,8 @@ Guest Question: ${userPrompt}`
   if (promptLower.includes('contact') || promptLower.includes('nicole') || promptLower.includes('marsha') || promptLower.includes('phone')) {
     return "📞 **Event Contacts**:\n• Nicole Jooste: 071 113 4812\n• Marsha Beukes: 079 528 5350";
   }
-  if (promptLower.includes('table') || promptLower.includes('ticket') || promptLower.includes('price')) {
-    return "🎟️ **Tickets & Tables**: Standard Dance Tickets are R150 per person. Full Private Tables of 10 are R1,500 (35 Tables total). Raffle tickets are R50 for 1 or R100 for 3.";
+  if (promptLower.includes('table') || promptLower.includes('ticket') || promptLower.includes('price') || promptLower.includes('seat') || promptLower.includes('sold out')) {
+    return "⛔ **Dance Tickets & Tables are Officially SOLD OUT!** All dance seats and tables have reached maximum capacity and can no longer be booked by guests. However, you can still support Sloan by entering our **Grand Charity Raffle** (R50 for 1, R100 for 3 with 7 fantastic prizes including a Whole Lamb) or making a direct medical donation!";
   }
 
   return "💚 **Welcome to Sloan Jooste's Fundraiser Dance!** Join us on Friday, 09 October 2026 at Kuils River Technical High School from 19:00 to 00:00 with live music by The Elginairs, DJ Cool J, and our Grand Charity Raffle (21:00 - 21:30). Dress code: A splash of green! 💚";

@@ -109,23 +109,13 @@ export default function BookingWizard({
     return 1;
   };
 
-  // Set default table number
+  // Default strictly to Raffle Tickets Only since dance tickets and full tables are officially SOLD OUT
   useEffect(() => {
-    if (tableBookingOption === 'Full Private Table (10 Guests)') {
-      if (completelyFreeTables.length > 0) {
-        if (!completelyFreeTables.includes(Number(tableNumber))) {
-          setTableNumber(completelyFreeTables[0]);
-        }
-      } else {
-        setTableNumber(0);
-      }
-    } else if (tableBookingOption === 'Standard Dance Ticket') {
-      const currentBooked = tableOccupancy[tableNumber] || 0;
-      if (!tableNumber || 10 - currentBooked < numTickets) {
-        setTableNumber(findAutoAssignedTable(numTickets));
-      }
+    setTableBookingOption('Raffle Tickets Only');
+    if (rafflePackOption === 0) {
+      setRafflePackOption(3);
     }
-  }, [tableBookingOption, numTickets, bookings]);
+  }, [defaultOption, isOpen]);
 
   if (!isOpen) return null;
 
@@ -175,22 +165,12 @@ export default function BookingWizard({
     setError('');
 
     if (step === 1) {
-      if (tableBookingOption === 'Full Private Table (10 Guests)') {
-        if (completelyFreeTables.length === 0) {
-          setError('Sorry, there are no 100% free tables remaining for a private table of 10.');
-          return;
-        }
-        setStep(2); // Choose from free tables
+      if (tableBookingOption === 'Standard Dance Ticket' || tableBookingOption === 'Full Private Table (10 Guests)') {
+        setError('All dance tickets and tables are officially sold out. Please select Raffle Tickets to proceed.');
         return;
       }
-      // Standard Dance Ticket or Raffle Only skips to Step 3
-      setStep(3);
-      return;
-    }
-
-    if (step === 2) {
-      if (!tableNumber || !completelyFreeTables.includes(Number(tableNumber))) {
-        setError('Please choose an available 100% free table for your private table.');
+      if (rafflePackOption === 0 && Number(donationAmount) <= 0) {
+        setError('Please choose at least 1 Raffle Ticket pack to support Sloan.');
         return;
       }
       setStep(3);
@@ -221,7 +201,7 @@ export default function BookingWizard({
 
   const handleBack = () => {
     setError('');
-    if (step === 3 && tableBookingOption !== 'Full Private Table (10 Guests)') {
+    if (step === 3) {
       setStep(1);
       return;
     }
@@ -369,7 +349,7 @@ export default function BookingWizard({
             <div>
               <h2 className="text-base font-black">Sloan Jooste's Fundraiser Dance</h2>
               <p className="text-xs text-emerald-300 font-bold">
-                {isPurchased ? '🎉 Booking Received & Confirmed' : `Step ${step} of 4 • ${step === 1 ? 'Select Package' : step === 2 ? 'Select Full Table' : step === 3 ? 'Guest Details' : 'Donation & Payment'}`}
+                {isPurchased ? '🎉 Booking Received & Confirmed' : `Step ${step === 1 ? '1 of 3 • Raffle Support' : step === 3 ? '2 of 3 • Supporter Details' : '3 of 3 • Donation & Payment'}`}
               </p>
             </div>
           </div>
@@ -383,11 +363,33 @@ export default function BookingWizard({
 
         {/* Step Indicator (only before purchase) */}
         {!isPurchased && (
-          <div className="grid grid-cols-4 bg-purple-50 border-b border-purple-100 text-center text-xs font-bold shrink-0">
-            <div className={`py-2.5 border-b-2 ${step >= 1 ? 'border-emerald-600 text-emerald-800' : 'border-transparent text-slate-400'}`}>1. Ticket</div>
-            <div className={`py-2.5 border-b-2 ${step >= 2 ? 'border-emerald-600 text-emerald-800' : 'border-transparent text-slate-400'}`}>2. Table</div>
-            <div className={`py-2.5 border-b-2 ${step >= 3 ? 'border-emerald-600 text-emerald-800' : 'border-transparent text-slate-400'}`}>3. Details</div>
-            <div className={`py-2.5 border-b-2 ${step >= 4 ? 'border-emerald-600 text-emerald-800' : 'border-transparent text-slate-400'}`}>4. Payment (EFT)</div>
+          <div className="grid grid-cols-3 bg-purple-50 border-b border-purple-100 text-center text-xs font-bold shrink-0">
+            <div className={`py-2.5 border-b-2 ${step >= 1 ? 'border-emerald-600 text-emerald-800' : 'border-transparent text-slate-400'}`}>1. Raffle Support</div>
+            <div className={`py-2.5 border-b-2 ${step >= 3 ? 'border-emerald-600 text-emerald-800' : 'border-transparent text-slate-400'}`}>2. Guest Details</div>
+            <div className={`py-2.5 border-b-2 ${step >= 4 ? 'border-emerald-600 text-emerald-800' : 'border-transparent text-slate-400'}`}>3. Payment (EFT)</div>
+          </div>
+        )}
+
+        {/* Official Sold Out Notice Banner */}
+        {!isPurchased && (
+          <div className="mx-6 mt-4 p-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white shadow-md flex items-start gap-3 border border-red-300 shrink-0 animate-fadeIn">
+            <div className="p-2 rounded-xl bg-white/20 shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5 text-white stroke-[2.5]" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-black uppercase tracking-wider bg-white text-red-700 px-2.5 py-0.5 rounded-full shadow-xs">
+                  ⛔ 100% SOLD OUT
+                </span>
+                <span className="text-xs font-bold text-red-100">Dance Tickets & Table Seating</span>
+              </div>
+              <p className="text-xs sm:text-sm font-semibold text-white leading-relaxed">
+                All dance seats and tables have reached maximum venue capacity and are officially sold out. No more seats or tables are available to purchase.
+              </p>
+              <p className="text-xs text-red-100 font-medium">
+                🎟️ You can still support Sloan by entering the <strong>Grand Charity Raffle</strong> (Whole Lamb & 6 other prizes) or making a direct donation below!
+              </p>
+            </div>
           </div>
         )}
 
@@ -554,133 +556,67 @@ export default function BookingWizard({
                   
                   <div className="grid grid-cols-1 gap-3">
                     
-                    {/* Option 1: Standard Dance Ticket */}
+                    {/* Option 1: Standard Dance Ticket (SOLD OUT) */}
                     <div 
-                      onClick={() => setTableBookingOption('Standard Dance Ticket')}
-                      className={`p-4 rounded-2xl border cursor-pointer transition flex items-center justify-between ${tableBookingOption === 'Standard Dance Ticket' ? 'border-2 border-emerald-600 bg-emerald-50/70 shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                      className="p-4 rounded-2xl border border-rose-200 bg-rose-50/50 opacity-70 cursor-not-allowed flex items-center justify-between"
                     >
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-slate-900">Standard Dance Ticket</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black">R150 / Seat</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-sm text-slate-500 line-through">Standard Dance Ticket</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-black">⛔ SOLD OUT</span>
                         </div>
-                        <p className="text-xs text-slate-500">Full admission & live entertainment. Guests are slotted into open seats across tables.</p>
+                        <p className="text-xs text-rose-600 font-medium">All dance seats are fully booked. No individual dance tickets can be purchased.</p>
                       </div>
-                      <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center border-emerald-600">
-                        {tableBookingOption === 'Standard Dance Ticket' && <div className="w-2.5 h-2.5 rounded-full bg-emerald-600"></div>}
+                      <div className="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center bg-slate-100">
+                        <span className="text-[10px] text-slate-400 font-black">✕</span>
                       </div>
                     </div>
 
-                    {/* Option 2: Full Private Table */}
+                    {/* Option 2: Full Private Table (SOLD OUT) */}
                     <div 
-                      onClick={() => {
-                        if (completelyFreeTables.length > 0) {
-                          setTableBookingOption('Full Private Table (10 Guests)');
-                        }
-                      }}
-                      className={`p-4 rounded-2xl border transition flex items-center justify-between ${completelyFreeTables.length === 0 ? 'opacity-60 cursor-not-allowed bg-slate-100 border-slate-200' : tableBookingOption === 'Full Private Table (10 Guests)' ? 'border-2 border-emerald-600 bg-emerald-50/70 shadow-sm cursor-pointer' : 'border-slate-200 bg-white hover:bg-slate-50 cursor-pointer'}`}
+                      className="p-4 rounded-2xl border border-rose-200 bg-rose-50/50 opacity-70 cursor-not-allowed flex items-center justify-between"
                     >
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-slate-900">Full Private Table (10 Guests)</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 font-black">R1,500 / Table</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-sm text-slate-500 line-through">Full Private Table (10 Guests)</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-black">⛔ SOLD OUT</span>
                         </div>
-                        <p className="text-xs text-slate-500">
-                          {completelyFreeTables.length > 0
-                            ? `Reserve a full 10-seater table. Choose from ${completelyFreeTables.length} available table${completelyFreeTables.length !== 1 ? 's' : ''} (all 10 seats free).`
-                            : 'All full tables currently have guests seated. Individual seats can still be booked above.'}
-                        </p>
+                        <p className="text-xs text-rose-600 font-medium">All tables are 100% reserved and full. No private tables are available.</p>
                       </div>
-                      <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center border-emerald-600">
-                        {tableBookingOption === 'Full Private Table (10 Guests)' && <div className="w-2.5 h-2.5 rounded-full bg-emerald-600"></div>}
+                      <div className="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center bg-slate-100">
+                        <span className="text-[10px] text-slate-400 font-black">✕</span>
                       </div>
                     </div>
 
-                    {/* Option 3: Raffle Only */}
+                    {/* Option 3: Raffle Supporter Only (ACTIVE & AVAILABLE) */}
                     <div 
                       onClick={() => {
                         setTableBookingOption('Raffle Tickets Only');
                         if (rafflePackOption === 0) setRafflePackOption(3);
                       }}
-                      className={`p-4 rounded-2xl border cursor-pointer transition flex items-center justify-between ${tableBookingOption === 'Raffle Tickets Only' ? 'border-2 border-emerald-600 bg-emerald-50/70 shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                      className="p-4 rounded-2xl border-2 border-emerald-600 bg-emerald-50/80 shadow-md cursor-pointer transition flex items-center justify-between ring-2 ring-emerald-500/30"
                     >
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-slate-900">Raffle Supporter Only (No Table Seat)</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-black">From R50</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-sm text-emerald-950">Grand Charity Raffle Supporter</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black">From R50</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-black">⭐ Available Now</span>
                         </div>
-                        <p className="text-xs text-slate-500">Support Sloan by entering the Grand Charity Raffle for 7 awesome prizes!</p>
+                        <p className="text-xs text-emerald-800 font-medium">Support Sloan by entering the Grand Charity Raffle. Stand a chance to win a Whole Lamb & 6 other prizes!</p>
                       </div>
-                      <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center border-emerald-600">
-                        {tableBookingOption === 'Raffle Tickets Only' && <div className="w-2.5 h-2.5 rounded-full bg-emerald-600"></div>}
+                      <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center border-emerald-600 bg-emerald-600">
+                        <div className="w-2 h-2 rounded-full bg-white"></div>
                       </div>
                     </div>
 
                   </div>
 
-                  {/* Quantity selector for Standard Dance Tickets */}
-                  {tableBookingOption === 'Standard Dance Ticket' && (
-                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-200 space-y-3">
-                      <div>
-                        <label className="block font-bold text-xs text-slate-800 mb-1">
-                          How many dance tickets would you like to purchase?
-                        </label>
-                        <div className="flex items-center gap-3">
-                          <input 
-                            type="range" 
-                            min="1" 
-                            max="9" 
-                            value={numTickets}
-                            onChange={(e) => setNumTickets(Number(e.target.value))}
-                            className="flex-1 accent-emerald-600 cursor-pointer"
-                          />
-                          <span className="font-black text-sm text-purple-950 bg-white px-3 py-1 rounded-xl border border-purple-200 shadow-2xs">
-                            {numTickets} {numTickets === 1 ? 'Seat' : 'Seats'} (R{numTickets * 150})
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Open Seat Slotted Allocation Helper */}
-                      <div className="p-3 rounded-xl bg-emerald-50/90 border border-emerald-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <span className="font-black text-emerald-950 flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            Slotted Seating: Table #{tableNumber}
-                          </span>
-                          <span className="text-[11px] text-emerald-800 font-medium block mt-0.5">
-                            {10 - (tableOccupancy[tableNumber] || 0)} open seat{10 - (tableOccupancy[tableNumber] || 0) !== 1 ? 's' : ''} available ({(tableOccupancy[tableNumber] || 0) > 0 ? `${tableOccupancy[tableNumber]}/10 currently seated` : '10 seats free'})
-                          </span>
-                        </div>
-                        {tablesWithOpenSeats.length > 1 && (
-                          <div className="flex items-center gap-1.5 self-end sm:self-center">
-                            <span className="text-[10px] font-bold text-slate-500">Change table:</span>
-                            <select
-                              value={tableNumber}
-                              onChange={(e) => setTableNumber(Number(e.target.value))}
-                              className="text-xs font-bold bg-white border border-emerald-300 rounded-lg px-2 py-1 text-slate-800 focus:outline-none focus:border-emerald-600 shadow-2xs"
-                            >
-                              {tablesWithOpenSeats.map(t => {
-                                const free = 10 - (tableOccupancy[t] || 0);
-                                const isShared = (tableOccupancy[t] || 0) > 0;
-                                return (
-                                  <option key={t} value={t}>
-                                    Table #{t} — {free} open seat{free !== 1 ? 's' : ''}{isShared ? ' (open seats)' : ' (10 free)'}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Charity Raffle Add-on Selection */}
+                  {/* Charity Raffle Pack Selection */}
                   <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50 via-emerald-50 to-purple-50 border border-purple-200 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Gift className="w-4 h-4 text-purple-700" />
-                        <span className="font-extrabold text-xs text-purple-950">Add Charity Raffle Tickets (7 Prizes)</span>
+                        <span className="font-extrabold text-xs text-purple-950">Select Your Charity Raffle Ticket Pack</span>
                       </div>
                       <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">
                         Grand Prize: Whole Lamb
@@ -689,10 +625,10 @@ export default function BookingWizard({
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {[
-                        { count: 0, price: 'R0', label: 'No Raffle' },
                         { count: 1, price: 'R50', label: '1 Ticket' },
                         { count: 3, price: 'R100', label: '3 Tickets (Popular)' },
                         { count: 6, price: 'R200', label: '6 Tickets' },
+                        { count: 10, price: 'R300', label: '10 Tickets (Best Value)' },
                       ].map((pkg) => (
                         <button
                           key={pkg.count}

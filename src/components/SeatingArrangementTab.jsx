@@ -58,9 +58,10 @@ export default function SeatingArrangementTab({
     isFreeTicket: false
   });
 
-  // 35 Tables Setup with complete occupancy and availability calculations
-  const tables = Array.from({ length: 35 }, (_, i) => {
+  // 40 Tables Setup (Tables 1-35 Public, Tables 36-40 Admin Only)
+  const tables = Array.from({ length: 40 }, (_, i) => {
     const tableNo = i + 1;
+    const isAdminOnly = tableNo > 35;
     const tableBookings = (bookings || []).filter(
       b => Number(b.tableNumber) === tableNo && getBookingSeatCount(b) > 0
     );
@@ -91,14 +92,15 @@ export default function SeatingArrangementTab({
       isFull,
       isOverbooked,
       isFilling,
+      isAdminOnly,
       tableName,
       tableNote,
       bookings: tableBookings
     };
   });
 
-  // Summary Metrics across all 35 tables
-  const totalCapacity = 350;
+  // Summary Metrics across all 40 tables
+  const totalCapacity = 400;
   const totalOccupiedSeats = tables.reduce((sum, t) => sum + t.occupiedSeats, 0);
   const totalRemainingSeats = Math.max(0, totalCapacity - totalOccupiedSeats);
   const fullTablesCount = tables.filter(t => t.isFull && !t.isOverbooked).length;
@@ -310,14 +312,14 @@ export default function SeatingArrangementTab({
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
               <Table className="w-6 h-6 text-emerald-600" />
-              Seating Arrangement & Table Management (35 Tables)
+              Seating Arrangement & Table Management (40 Tables)
             </h2>
             <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-950 border border-purple-300">
-              Admin Portal
+              Admin Portal (Tables 36-40 Admin Only)
             </span>
           </div>
           <p className="text-xs text-purple-800 mt-1 font-medium">
-            350 Total Capacity (10 Seats per Table) • Move guests between tables, assign seats, view seat availability, and manage table names.
+            400 Total Capacity (10 Seats per Table) • Move guests between tables, assign seats, view seat availability, and manage table names.
           </p>
         </div>
 
@@ -331,7 +333,7 @@ export default function SeatingArrangementTab({
             }`}
           >
             <LayoutGrid className="w-4 h-4 text-purple-700" />
-            <span>{showVisualMap ? 'Hide Visual Map' : 'Show 35-Table Map'}</span>
+            <span>{showVisualMap ? 'Hide Visual Map' : 'Show 40-Table Map'}</span>
           </button>
 
           <button
@@ -347,19 +349,19 @@ export default function SeatingArrangementTab({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div className="p-4 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-1">
           <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Total Seats Booked</span>
-          <p className="text-2xl sm:text-3xl font-black text-slate-900">{totalOccupiedSeats} <span className="text-sm font-bold text-slate-400">/ 350</span></p>
+          <p className="text-2xl sm:text-3xl font-black text-slate-900">{totalOccupiedSeats} <span className="text-sm font-bold text-slate-400">/ 400</span></p>
           <span className="text-[10px] text-purple-800 font-semibold">{Math.round((totalOccupiedSeats / totalCapacity) * 100)}% Capacity Occupied</span>
         </div>
 
         <div className="p-4 rounded-3xl bg-emerald-50/70 border border-emerald-300 shadow-sm space-y-1">
           <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Total Seats Left</span>
           <p className="text-2xl sm:text-3xl font-black text-emerald-700">{totalRemainingSeats} <span className="text-sm font-bold text-emerald-600/60">Seats Left</span></p>
-          <span className="text-[10px] text-emerald-800/80 font-bold">Open Across 35 Tables</span>
+          <span className="text-[10px] text-emerald-800/80 font-bold">Open Across 40 Tables</span>
         </div>
 
         <div className="p-4 rounded-3xl bg-white border border-purple-200 shadow-sm space-y-1">
           <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">100% Free Tables</span>
-          <p className="text-2xl sm:text-3xl font-black text-purple-950">{availableTablesCount} <span className="text-sm font-bold text-slate-400">/ 35</span></p>
+          <p className="text-2xl sm:text-3xl font-black text-purple-950">{availableTablesCount} <span className="text-sm font-bold text-slate-400">/ 40</span></p>
           <span className="text-[10px] text-purple-700 font-semibold">{availableTablesCount} full tables ({partiallyBookedTablesCount} sharing open seats)</span>
         </div>
 
@@ -404,10 +406,10 @@ export default function SeatingArrangementTab({
             onChange={(e) => setSelectedTableFilter(e.target.value)}
             className="bg-slate-50 border border-purple-200 rounded-xl px-3 py-2 text-slate-800 font-bold focus:outline-none focus:border-emerald-600 text-xs max-w-[260px] truncate"
           >
-            <option value="all">All 35 Tables ({totalRemainingSeats} Seats Left)</option>
+            <option value="all">All 40 Tables ({totalRemainingSeats} Seats Left)</option>
             {tables.map((t) => (
               <option key={t.tableNumber} value={t.tableNumber}>
-                Table #{t.tableNumber} {t.tableName ? `— 🏷️ ${t.tableName}` : ''} ({t.isFull ? '🔴 FULL' : `🟢 ${t.remainingSeats} left`})
+                Table #{t.tableNumber}{t.isAdminOnly ? ' (Admin Only)' : ''} {t.tableName ? `— 🏷️ ${t.tableName}` : ''} ({t.isFull ? '🔴 FULL' : `🟢 ${t.remainingSeats} left`})
               </option>
             ))}
           </select>
@@ -424,12 +426,16 @@ export default function SeatingArrangementTab({
         </div>
       </div>
 
-      {/* Grid of 35 Tables with Seated Guests */}
+      {/* Grid of 40 Tables with Seated Guests */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredTables.map((table) => (
           <div 
             key={table.tableNumber}
             className={`p-4 rounded-3xl border flex flex-col justify-between transition-all bg-white shadow-sm ${
+              table.isAdminOnly
+                ? 'ring-1 ring-purple-300'
+                : ''
+            } ${
               table.isFull 
                 ? 'border-rose-300 bg-gradient-to-b from-rose-50/50 to-white' 
                 : table.isFilling
@@ -446,6 +452,11 @@ export default function SeatingArrangementTab({
                       <Table className={`w-4 h-4 ${table.isFull ? 'text-rose-600' : table.isFilling ? 'text-amber-600' : 'text-emerald-600'}`} /> 
                       Table #{table.tableNumber}
                     </span>
+                    {table.isAdminOnly && (
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-950 border border-purple-300">
+                        🔒 Admin Only
+                      </span>
+                    )}
                     {/* Edit Table Name / Note Button */}
                     <button
                       type="button"
@@ -666,7 +677,7 @@ export default function SeatingArrangementTab({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-purple-900 mb-1">Select Destination Table (1-35):</label>
+                <label className="block text-xs font-bold text-purple-900 mb-1">Select Destination Table (1-40):</label>
                 <select
                   value={movingBooking.targetTable}
                   onChange={(e) => setMovingBooking({ ...movingBooking, targetTable: Number(e.target.value) })}
@@ -682,7 +693,7 @@ export default function SeatingArrangementTab({
                         key={t.tableNumber} 
                         value={t.tableNumber}
                       >
-                        Table #{t.tableNumber} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10 booked)`} {isCurrent ? '← (Current Table)' : ''}
+                        Table #{t.tableNumber}{t.isAdminOnly ? ' (Admin Only)' : ''} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10 booked)`} {isCurrent ? '← (Current Table)' : ''}
                       </option>
                     );
                   })}
@@ -826,7 +837,7 @@ export default function SeatingArrangementTab({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 {addGuestForm.isFreeTicket ? <Gift className="w-4 h-4 text-purple-700" /> : <UserPlus className="w-4 h-4 text-emerald-600" />}
-                {addGuestForm.isFreeTicket ? 'Allocate Free Complimentary Pass (35 Tables)' : 'Add Seated Guest Manually (35 Tables)'}
+                {addGuestForm.isFreeTicket ? 'Allocate Free Complimentary Pass (40 Tables)' : 'Add Seated Guest Manually (40 Tables)'}
               </h3>
               <button 
                 onClick={() => setIsAddGuestModalOpen(false)}
@@ -904,7 +915,7 @@ export default function SeatingArrangementTab({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-purple-900 font-bold mb-1">Assign Table (1-35) *</label>
+                  <label className="block text-purple-900 font-bold mb-1">Assign Table (1-40) *</label>
                   <select
                     value={addGuestForm.tableNumber}
                     onChange={(e) => setAddGuestForm({ ...addGuestForm, tableNumber: Number(e.target.value) })}
@@ -914,7 +925,7 @@ export default function SeatingArrangementTab({
                       const isOver = t.occupiedSeats >= 10;
                       return (
                         <option key={t.tableNumber} value={t.tableNumber}>
-                          Table #{t.tableNumber} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10)`}
+                          Table #{t.tableNumber}{t.isAdminOnly ? ' (Admin Only)' : ''} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10)`}
                         </option>
                       );
                     })}

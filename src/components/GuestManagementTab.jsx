@@ -95,9 +95,10 @@ export default function GuestManagementTab({
     return matchesSearch;
   });
 
-  // Dynamic table occupancy calculation across 35 tables (10 capacity each = 350 seats)
-  const tables = Array.from({ length: 35 }, (_, i) => {
+  // Dynamic table occupancy calculation across 40 tables (Tables 1-35 public, 36-40 admin only; 10 capacity each = 400 seats)
+  const tables = Array.from({ length: 40 }, (_, i) => {
     const tableNo = i + 1;
+    const isAdminOnly = tableNo > 35;
     const tableBookings = (bookings || []).filter(
       b => Number(b.tableNumber) === tableNo && getBookingSeatCount(b) > 0
     );
@@ -117,6 +118,7 @@ export default function GuestManagementTab({
       remainingSeats,
       isFull,
       isOverbooked,
+      isAdminOnly,
       bookings: tableBookings
     };
   });
@@ -379,7 +381,7 @@ export default function GuestManagementTab({
             <Users className="w-5 h-5 text-emerald-600" />
           </div>
           <p className="text-3xl font-black text-slate-900 mt-1">{totalGuests} Guests</p>
-          <span className="text-xs text-slate-500 font-medium">{totalBookingsCount} Bookings Across 35 Tables</span>
+          <span className="text-xs text-slate-500 font-medium">{totalBookingsCount} Bookings Across 40 Tables</span>
         </div>
 
         <div className="p-5 rounded-3xl bg-emerald-50/70 border border-emerald-300 shadow-sm">
@@ -466,10 +468,10 @@ export default function GuestManagementTab({
               onChange={(e) => setTableFilter(e.target.value)}
               className="bg-transparent text-slate-900 font-bold focus:outline-none text-xs"
             >
-              <option value="all">All 35 Tables</option>
+              <option value="all">All 40 Tables</option>
               {tables.map((t) => (
                 <option key={t.tableNumber} value={t.tableNumber}>
-                  Table #{t.tableNumber} {t.isFull ? '(🔴 FULL)' : `(🟢 ${t.remainingSeats} Seats Left)`}
+                  Table #{t.tableNumber}{t.isAdminOnly ? ' (Admin Only)' : ''} {t.isFull ? '(🔴 FULL)' : `(🟢 ${t.remainingSeats} Seats Left)`}
                 </option>
               ))}
             </select>
@@ -531,7 +533,7 @@ export default function GuestManagementTab({
           <thead>
             <tr className="bg-purple-50/70 border-b border-purple-200 text-purple-900 uppercase tracking-wider font-extrabold text-[11px]">
               <th className="p-3.5">Guest & Contact</th>
-              <th className="p-3.5">Table (1-35)</th>
+              <th className="p-3.5">Table (1-40)</th>
               <th className="p-3.5">Dance Seats</th>
               <th className="p-3.5">Raffle Tickets & Slices</th>
               <th className="p-3.5">Amount</th>
@@ -799,7 +801,7 @@ export default function GuestManagementTab({
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900">Edit Guest & Allocate Raffle Tickets</h3>
-                  <p className="text-xs text-purple-800 font-medium">Update table (1-35), contact details, and assign raffle ticket names</p>
+                  <p className="text-xs text-purple-800 font-medium">Update table (1-40), contact details, and assign raffle ticket names</p>
                 </div>
               </div>
               <button 
@@ -884,7 +886,7 @@ export default function GuestManagementTab({
                 <span className="text-xs font-black text-purple-900 uppercase tracking-wider block">2. Table Allocation & Dance Seats</span>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-700 font-bold mb-1">Assigned Table (1 - 35):</label>
+                    <label className="block text-slate-700 font-bold mb-1">Assigned Table (1 - 40):</label>
                     <select
                       value={editingGuest.tableNumber}
                       onChange={(e) => setEditingGuest({ ...editingGuest, tableNumber: Number(e.target.value) })}
@@ -902,7 +904,7 @@ export default function GuestManagementTab({
 
                         return (
                           <option key={t.tableNumber} value={t.tableNumber}>
-                            Table #{t.tableNumber} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${effectiveRemaining} seats left (${effectiveOccupied}/10)`} {isCurrentTable ? '← (Current)' : ''}
+                            Table #{t.tableNumber}{t.isAdminOnly ? ' (Admin Only)' : ''} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${effectiveRemaining} seats left (${effectiveOccupied}/10)`} {isCurrentTable ? '← (Current)' : ''}
                           </option>
                         );
                       })}
@@ -1012,8 +1014,8 @@ export default function GuestManagementTab({
                             }}
                             className="w-full bg-slate-50 border border-purple-200 rounded-lg px-2 py-1 text-slate-900 focus:outline-none focus:border-emerald-600 text-xs font-semibold"
                           >
-                            {Array.from({ length: 35 }, (_, i) => (
-                              <option key={i + 1} value={i + 1}>Table #{i + 1}</option>
+                            {Array.from({ length: 40 }, (_, i) => (
+                              <option key={i + 1} value={i + 1}>Table #{i + 1}{i + 1 > 35 ? ' (Admin Table)' : ''}</option>
                             ))}
                           </select>
                         </div>
@@ -1054,7 +1056,7 @@ export default function GuestManagementTab({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                 {addForm.isFreeTicket ? <Gift className="w-5 h-5 text-purple-700" /> : <Plus className="w-5 h-5 text-emerald-600" />}
-                {addForm.isFreeTicket ? 'Allocate Free Complimentary VIP Ticket' : 'Add New Guest & Raffle Tickets (35 Tables)'}
+                {addForm.isFreeTicket ? 'Allocate Free Complimentary VIP Ticket' : 'Add New Guest & Raffle Tickets (40 Tables)'}
               </h3>
               <button 
                 onClick={() => setIsAddGuestModalOpen(false)}
@@ -1133,7 +1135,7 @@ export default function GuestManagementTab({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-purple-900 font-bold mb-1">Table (1-35) *</label>
+                  <label className="block text-purple-900 font-bold mb-1">Table (1-40) *</label>
                   <select
                     value={addForm.tableNumber}
                     onChange={(e) => setAddForm({ ...addForm, tableNumber: Number(e.target.value) })}
@@ -1143,7 +1145,7 @@ export default function GuestManagementTab({
                       const isOver = t.occupiedSeats >= 10;
                       return (
                         <option key={t.tableNumber} value={t.tableNumber}>
-                          Table #{t.tableNumber} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10)`}
+                          Table #{t.tableNumber}{t.isAdminOnly ? ' (Admin Only)' : ''} — {isOver ? `🟣 ${t.occupiedSeats}/10 (${t.occupiedSeats > 10 ? `Overbooked +${t.occupiedSeats - 10}` : 'Full • Overbookable'})` : `🟢 ${t.remainingSeats} seats left (${t.occupiedSeats}/10)`}
                         </option>
                       );
                     })}
